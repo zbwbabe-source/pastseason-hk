@@ -1347,6 +1347,17 @@ export function OffSeasonInventoryDashboard({
               </div>
             </section>
 
+        {/* 연차별 정체재고 분석 섹션 */}
+        <StagnantByVintageSection
+          itemsByBucket={stagnantByBucket}
+          periodLabel={periodLabel}
+          totalStockByBucket={{
+            Y1: cyY1Stock / 1000,
+            Y2: cyY2Stock / 1000,
+            Y3Plus: cyY3PlusStock / 1000,
+          }}
+        />
+
         {/* 품번별 상세 분석 섹션 */}
         <section className="mb-8">
           <div className="bg-white rounded-lg shadow-md p-6 border-2 border-indigo-200">
@@ -1354,7 +1365,7 @@ export function OffSeasonInventoryDashboard({
               <span className="text-2xl">🔍</span>
               <h2 className="text-xl font-bold text-indigo-900">품번별 상세 분석</h2>
             </div>
-            <p className="text-xs text-gray-500 mb-6">재고택가 기준 상위 품번 분석</p>
+            <p className="text-xs text-gray-500 mb-6">재고택가 기준 상위 5개 품번 분석</p>
             
             {(['Y1', 'Y2', 'Y3Plus'] as const).map((bucket) => {
               const bucketLabel = bucket === 'Y1' ? '1년차 (24F)' : bucket === 'Y2' ? '2년차 (23F)' : '3년차~ (22F~)';
@@ -1363,7 +1374,6 @@ export function OffSeasonInventoryDashboard({
               if (items.length === 0) return null;
               
               const ItemBucketTable = () => {
-                const [showAll, setShowAll] = useState(false);
                 const [selectedCategory, setSelectedCategory] = useState<string>('전체');
                 
                 // 카테고리 필터링
@@ -1371,7 +1381,8 @@ export function OffSeasonInventoryDashboard({
                   ? items 
                   : items.filter(item => item.mappedCategory === selectedCategory);
                 
-                const displayItems = showAll ? filteredItems : filteredItems.slice(0, 10);
+                // 상위 5개만 표시
+                const displayItems = filteredItems.slice(0, 5);
                 
                 // 카테고리별 개수 집계
                 const categoryCounts = {
@@ -1470,18 +1481,6 @@ export function OffSeasonInventoryDashboard({
                         </tbody>
                       </table>
                     </div>
-                    
-                    {filteredItems.length > 10 && (
-                      <div className="mt-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => setShowAll(!showAll)}
-                          className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
-                        >
-                          {showAll ? '접기 ▲' : `더보기 (${filteredItems.length - 10}개 더) ▼`}
-                        </button>
-                      </div>
-                    )}
                   </>
                 );
               };
@@ -1500,17 +1499,6 @@ export function OffSeasonInventoryDashboard({
             })}
           </div>
         </section>
-
-        {/* 연차별 정체재고 분석 섹션 */}
-        <StagnantByVintageSection
-          itemsByBucket={stagnantByBucket}
-          periodLabel={periodLabel}
-          totalStockByBucket={{
-            Y1: cyY1Stock / 1000,
-            Y2: cyY2Stock / 1000,
-            Y3Plus: cyY3PlusStock / 1000,
-          }}
-        />
 
         {/* Trend (추세) 섹션 - 2개 그래프를 가로로 배치 */}
         <section className="mb-8">
