@@ -67,6 +67,7 @@ export type InventoryRow = InventoryRowRaw & {
   cogsFx: number;
   discountRateMonth: number | null;
   seasonInfo: SeasonInfo;
+  mappedCategory: CategoryType; // 표준화된 카테고리
 };
 
 /**
@@ -100,14 +101,21 @@ export type GraphDataRow = GraphDataRowRaw & {
 };
 
 /**
+ * 카테고리 타입 (표준화)
+ */
+export type CategoryType = "INNER" | "OUTER" | "BOTTOM" | "의류기타";
+
+/**
  * 과시즌 목표 데이터 (원본)
  */
 export type TargetDataRowRaw = {
-  PERIOD: string; // "2025-12"
+  PERIOD: string; // "Dec-25"
   SEASON_NAME: string; // "2022FW", "2023FW", etc.
-  SEASON: string; // "22FW", "23FW", etc.
-  CATEGORY: string; // "BOTTOM", "INNER", "OUTER", etc.
-  AMOUNT: number; // 목표 금액
+  SEASON: string; // "22F", "23F", etc.
+  CATEGORY: string; // "BOTTOM", "INNER", "OUTER", "Wear_etc"
+  TAG_SALES: number; // 택가 판매 목표
+  NET_SALES: number; // 실판매 목표
+  DISCOUNT_RATE: number; // 목표 할인율
 };
 
 /**
@@ -116,9 +124,11 @@ export type TargetDataRowRaw = {
 export type TargetDataRow = {
   period: string; // "2025-12"
   seasonName: string; // "2022FW"
-  season: string; // "22FW"
-  category: string; // "BOTTOM"
-  amount: number; // 목표 금액
+  season: string; // "22F"
+  category: CategoryType; // 표준화된 카테고리
+  tagSales: number; // 택가 판매 목표
+  netSales: number; // 실판매 목표
+  discountRate: number; // 목표 할인율
   seasonInfo: SeasonInfo;
 };
 

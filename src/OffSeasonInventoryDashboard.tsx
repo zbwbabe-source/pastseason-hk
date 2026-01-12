@@ -749,6 +749,66 @@ export function OffSeasonInventoryDashboard({
     return grouped;
   }, [filteredData]);
 
+  // 카테고리별 목표 대비 분석
+  const categoryAnalysis = useMemo(() => {
+    console.log('=== 카테고리별 분석 ===');
+    
+    type CategoryData = {
+      tagSalesActual: number;
+      netSalesActual: number;
+      tagSalesTarget: number;
+      discountRateTarget: number;
+      discountRateActual: number;
+    };
+    
+    const result: Record<string, Record<string, CategoryData>> = {};
+    
+    // 연차별 (Y1, Y2, Y3Plus)로 처리
+    ['Y1', 'Y2', 'Y3Plus'].forEach(bucket => {
+      result[bucket] = {
+        'INNER': { tagSalesActual: 0, netSalesActual: 0, tagSalesTarget: 0, discountRateTarget: 0, discountRateActual: 0 },
+        'OUTER': { tagSalesActual: 0, netSalesActual: 0, tagSalesTarget: 0, discountRateTarget: 0, discountRateActual: 0 },
+        'BOTTOM': { tagSalesActual: 0, netSalesActual: 0, tagSalesTarget: 0, discountRateTarget: 0, discountRateActual: 0 },
+        '의류기타': { tagSalesActual: 0, netSalesActual: 0, tagSalesTarget: 0, discountRateTarget: 0, discountRateActual: 0 },
+      };
+    });
+    
+    // 실적 집계 (filteredData 사용)
+    filteredData.forEach(row => {
+      const bucket = row.seasonInfo.yearBucket;
+      const category = row.mappedCategory;
+      
+      if (bucket in result && category in result[bucket]) {
+        result[bucket][category].tagSalesActual += row.grossSalesFx;
+        result[bucket][category].netSalesActual += row.netSalesFx;
+      }
+    });
+    
+    // 목표 집계 (targetData에서)
+    targetData.filter(t => t.period === '2025-12').forEach(target => {
+      const bucket = target.seasonInfo.yearBucket;
+      const category = target.category;
+      
+      if (bucket in result && category in result[bucket]) {
+        result[bucket][category].tagSalesTarget += target.tagSales;
+        result[bucket][category].discountRateTarget = target.discountRate;
+      }
+    });
+    
+    // 할인율 실적 계산
+    Object.keys(result).forEach(bucket => {
+      Object.keys(result[bucket]).forEach(category => {
+        const data = result[bucket][category];
+        if (data.tagSalesActual > 0) {
+          data.discountRateActual = 1 - (data.netSalesActual / data.tagSalesActual);
+        }
+      });
+    });
+    
+    console.log('Category analysis:', result);
+    return result;
+  }, [filteredData, targetData]);
+
   // 월 목표대비 현황 계산
   const monthlyTargetStatus = useMemo(() => {
     console.log('=== 월 목표대비 현황 계산 ===');
@@ -798,11 +858,11 @@ export function OffSeasonInventoryDashboard({
       // 시즌별로 목표 합계
       const targetBySeason: Record<string, number> = {};
       filteredTargets.forEach(t => {
-        const season = t.season; // "22FW", "23FW", "24FW" 등
+        const season = t.season; // "22F", "23F", "24F" 등
         if (!targetBySeason[season]) {
           targetBySeason[season] = 0;
         }
-        targetBySeason[season] += t.amount;
+        targetBySeason[season] += t.tagSales;
       });
       
       console.log('Target by season:', targetBySeason);
@@ -1034,6 +1094,81 @@ export function OffSeasonInventoryDashboard({
           </div>
         </section>
 
+        {/* 카테고리별 목표 대비 분석 섹션 */}
+        <section className="mb-8">
+          <div className="bg-white rounded-lg shadow-md p-6 border-2 border-purple-200">
+            <div className="flex items-center gap-3 mb-6">
+              <span className="text-2xl">📊</span>
+              <h2 className="text-xl font-bold text-purple-900">카테고리별 목표 대비 분석</h2>
+            </div>
+            
+            {/* 연차별 테이블 */}
+            {(['Y1', 'Y2', 'Y3Plus'] as const).map((bucket) => {
+              const bucketLabel = bucket === 'Y1' ? '1년차 (24F)' : bucket === 'Y2' ? '2년차 (23F)' : '3년차~ (22F~)';
+              const categories = categoryAnalysis[bucket];
+              
+              return (
+                <div key={bucket} className="mb-6 last:mb-0">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">{bucketLabel}</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-200">
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 whitespace-nowrap">카테고리</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">판매 목표</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">판매 실적</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">달성률 (%)</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">할인율 목표</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">할인율 실적</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">할인율 차이</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(categories).map(([category, data]) => {
+                          const achievementRate = data.tagSalesTarget > 0 
+                            ? (data.tagSalesActual / data.tagSalesTarget) * 100 
+                            : 0;
+                          const discountDiff = (data.discountRateActual - data.discountRateTarget) * 100;
+                          
+                          return (
+                            <tr key={category} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="px-4 py-2 text-left text-gray-900 font-medium whitespace-nowrap">{category}</td>
+                              <td className="px-4 py-2 text-right text-gray-700">
+                                {(data.tagSalesTarget / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
+                              </td>
+                              <td className="px-4 py-2 text-right text-gray-700">
+                                {(data.tagSalesActual / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
+                              </td>
+                              <td className={`px-4 py-2 text-right font-semibold ${
+                                achievementRate >= 100 ? 'bg-green-50 text-green-700'
+                                : achievementRate >= 80 ? 'bg-yellow-50 text-yellow-700'
+                                : 'bg-red-50 text-red-700'
+                              }`}>
+                                {achievementRate.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+                              </td>
+                              <td className="px-4 py-2 text-right text-gray-700">
+                                {(data.discountRateTarget * 100).toFixed(1)}%
+                              </td>
+                              <td className="px-4 py-2 text-right text-orange-600 font-medium">
+                                {(data.discountRateActual * 100).toFixed(1)}%
+                              </td>
+                              <td className={`px-4 py-2 text-right font-semibold ${
+                                discountDiff > 0 ? 'text-red-600' : 'text-green-600'
+                              }`}>
+                                {discountDiff > 0 ? '+' : ''}{discountDiff.toFixed(1)}%p
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
             {/* Status (현황) 섹션 - 4개 메트릭 카드 */}
             <section className="mb-8">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1056,23 +1191,23 @@ export function OffSeasonInventoryDashboard({
                   {/* 연차별 기말 재고 */}
                   <div className="space-y-1.5 pt-2 border-t border-gray-100">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-gray-500">1년차:</span>
-                      <span className="text-gray-700 font-medium">{formatNumberK(cyY1Stock)}</span>
-                      <span className={`text-xs font-medium ${y1StockYoyRatio !== null && y1StockYoyRatio >= 100 ? 'text-blue-600' : 'text-red-600'}`}>
+                      <span className="text-gray-500 w-12">1년차:</span>
+                      <span className="text-gray-700 font-medium w-16 text-right">{formatNumberK(cyY1Stock)}</span>
+                      <span className={`text-xs font-medium w-14 text-right ${y1StockYoyRatio !== null && y1StockYoyRatio >= 100 ? 'text-blue-600' : 'text-red-600'}`}>
                         {formatPercentRatio(y1StockYoyRatio)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-gray-500">2년차:</span>
-                      <span className="text-gray-700 font-medium">{formatNumberK(cyY2Stock)}</span>
-                      <span className={`text-xs font-medium ${y2StockYoyRatio !== null && y2StockYoyRatio >= 100 ? 'text-blue-600' : 'text-red-600'}`}>
+                      <span className="text-gray-500 w-12">2년차:</span>
+                      <span className="text-gray-700 font-medium w-16 text-right">{formatNumberK(cyY2Stock)}</span>
+                      <span className={`text-xs font-medium w-14 text-right ${y2StockYoyRatio !== null && y2StockYoyRatio >= 100 ? 'text-blue-600' : 'text-red-600'}`}>
                         {formatPercentRatio(y2StockYoyRatio)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-gray-500">3년차~:</span>
-                      <span className="text-gray-700 font-medium">{formatNumberK(cyY3PlusStock)}</span>
-                      <span className="text-xs font-medium text-gray-500">
+                      <span className="text-gray-500 w-12">3년차~:</span>
+                      <span className="text-gray-700 font-medium w-16 text-right">{formatNumberK(cyY3PlusStock)}</span>
+                      <span className="text-xs font-medium text-gray-500 w-14 text-right">
                         {formatPercentRatio(y3PlusStockYoyRatio)}
                       </span>
                     </div>
@@ -1098,23 +1233,23 @@ export function OffSeasonInventoryDashboard({
                   {/* 연차별 판매금액 */}
                   <div className="space-y-1.5 pt-2 border-t border-gray-100">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-gray-500">1년차:</span>
-                      <span className="text-gray-700 font-medium">{formatNumberK(cyY1Sales)}</span>
-                      <span className={`text-xs font-medium ${y1SalesYoyRatio !== null && y1SalesYoyRatio >= 100 ? 'text-blue-600' : 'text-red-600'}`}>
+                      <span className="text-gray-500 w-12">1년차:</span>
+                      <span className="text-gray-700 font-medium w-16 text-right">{formatNumberK(cyY1Sales)}</span>
+                      <span className={`text-xs font-medium w-14 text-right ${y1SalesYoyRatio !== null && y1SalesYoyRatio >= 100 ? 'text-blue-600' : 'text-red-600'}`}>
                         {formatPercentRatio(y1SalesYoyRatio)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-gray-500">2년차:</span>
-                      <span className="text-gray-700 font-medium">{formatNumberK(cyY2Sales)}</span>
-                      <span className={`text-xs font-medium ${y2SalesYoyRatio !== null && y2SalesYoyRatio >= 100 ? 'text-blue-600' : 'text-red-600'}`}>
+                      <span className="text-gray-500 w-12">2년차:</span>
+                      <span className="text-gray-700 font-medium w-16 text-right">{formatNumberK(cyY2Sales)}</span>
+                      <span className={`text-xs font-medium w-14 text-right ${y2SalesYoyRatio !== null && y2SalesYoyRatio >= 100 ? 'text-blue-600' : 'text-red-600'}`}>
                         {formatPercentRatio(y2SalesYoyRatio)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-gray-500">3년차~:</span>
-                      <span className="text-gray-700 font-medium">{formatNumberK(cyY3PlusSales)}</span>
-                      <span className="text-xs font-medium text-gray-500">
+                      <span className="text-gray-500 w-12">3년차~:</span>
+                      <span className="text-gray-700 font-medium w-16 text-right">{formatNumberK(cyY3PlusSales)}</span>
+                      <span className="text-xs font-medium text-gray-500 w-14 text-right">
                         {formatPercentRatio(y3PlusSalesYoyRatio)}
                       </span>
                     </div>
@@ -1133,23 +1268,23 @@ export function OffSeasonInventoryDashboard({
                   {/* 연차별 할인율 */}
                   <div className="space-y-1.5 pt-2 border-t border-gray-100">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-gray-500">1년차:</span>
-                      <span className="text-orange-600 font-medium">{cyY1Discount.toFixed(1)}%</span>
-                      <span className="text-orange-600 text-xs font-medium">
+                      <span className="text-gray-500 w-12">1년차:</span>
+                      <span className="text-orange-600 font-medium w-16 text-right">{cyY1Discount.toFixed(1)}%</span>
+                      <span className="text-orange-600 text-xs font-medium w-16 text-right">
                         {formatPercentPoint(y1DiscountDiffPp)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-gray-500">2년차:</span>
-                      <span className="text-orange-600 font-medium">{cyY2Discount.toFixed(1)}%</span>
-                      <span className="text-orange-600 text-xs font-medium">
+                      <span className="text-gray-500 w-12">2년차:</span>
+                      <span className="text-orange-600 font-medium w-16 text-right">{cyY2Discount.toFixed(1)}%</span>
+                      <span className="text-orange-600 text-xs font-medium w-16 text-right">
                         {formatPercentPoint(y2DiscountDiffPp)}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-gray-500">3년차~:</span>
-                      <span className="text-orange-600 font-medium">{cyY3PlusDiscount.toFixed(1)}%</span>
-                      <span className="text-orange-600 text-xs font-medium">
+                      <span className="text-gray-500 w-12">3년차~:</span>
+                      <span className="text-orange-600 font-medium w-16 text-right">{cyY3PlusDiscount.toFixed(1)}%</span>
+                      <span className="text-orange-600 text-xs font-medium w-16 text-right">
                         {y3PlusDiscountDiffPp !== null ? formatPercentPoint(y3PlusDiscountDiffPp) : '-'}
                       </span>
                     </div>
@@ -1165,16 +1300,16 @@ export function OffSeasonInventoryDashboard({
                   {/* 연차별 재고 일수 */}
                   <div className="space-y-1.5 pt-2 border-t border-gray-100 mb-2">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-gray-500">1년차:</span>
-                      <span className="text-gray-700 font-medium">{y1InventoryDays}일</span>
+                      <span className="text-gray-500 w-12">1년차:</span>
+                      <span className="text-gray-700 font-medium w-16 text-right">{y1InventoryDays}일</span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-gray-500">2년차:</span>
-                      <span className="text-gray-700 font-medium">{y2InventoryDays}일</span>
+                      <span className="text-gray-500 w-12">2년차:</span>
+                      <span className="text-gray-700 font-medium w-16 text-right">{y2InventoryDays}일</span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-gray-500">3년차~:</span>
-                      <span className="text-gray-700 font-medium">{y3PlusInventoryDays}일</span>
+                      <span className="text-gray-500 w-12">3년차~:</span>
+                      <span className="text-gray-700 font-medium w-16 text-right">{y3PlusInventoryDays}일</span>
                     </div>
                   </div>
                   <div className="text-xs text-gray-500">1개월 판매 기준</div>
@@ -1409,14 +1544,6 @@ export function OffSeasonInventoryDashboard({
           
           </div>
         </section>
-
-        {/* Plan (계획) 섹션 */}
-        <section className="mb-8">
-          <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">계획 (Plan)</h2>
-            <p className="text-gray-600">계획 섹션 - 향후 구현 예정</p>
-          </div>
-        </section>
       </div>
     </div>
   );
@@ -1576,14 +1703,45 @@ const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ ite
                     </div>
                   </div>
                   
-                  {/* 하단: AI 분석 */}
-                  <div className={`${insightBg} ${insightBorder} border rounded-lg p-3 flex items-start gap-2`}>
-                    <span className="text-lg">{insightIcon}</span>
-                    <div className="flex-1">
-                      <div className="text-xs font-semibold text-gray-700 mb-1">AI 분석</div>
-                      <div className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{insight}</div>
-                    </div>
-                  </div>
+                  {/* 하단: AI 분석 (개선된 버전 - 시즌별/카테고리별 특징 포함) */}
+                  {(() => {
+                    const allStagnantItems = [...itemsByBucket.Y1, ...itemsByBucket.Y2, ...itemsByBucket.Y3Plus];
+                    
+                    // 카테고리별 분석
+                    const categoryCount: Record<string, number> = {};
+                    allStagnantItems.forEach(item => {
+                      const cat = item.subcategoryName || 'Unknown';
+                      categoryCount[cat] = (categoryCount[cat] || 0) + 1;
+                    });
+                    const topCategories = Object.entries(categoryCount)
+                      .sort((a, b) => b[1] - a[1])
+                      .slice(0, 3);
+                    
+                    const zeroSalesCount = allStagnantItems.filter(item => item.monthGrossK < 0.001).length;
+                    const zeroSalesPct = (zeroSalesCount / allStagnantItems.length) * 100;
+                    
+                    // 카테고리 특징 문구 생성
+                    const categoryText = topCategories.length > 0 
+                      ? `${topCategories.map(([cat, count]) => `${cat}(${count}개)`).join(', ')}에 집중되어 있습니다.`
+                      : '다양한 카테고리에 분산되어 있습니다.';
+                    
+                    const zeroSalesText = zeroSalesPct > 50 
+                      ? ` ${zeroSalesCount}개 품번(${zeroSalesPct.toFixed(0)}%)은 당월 판매가 전무합니다.`
+                      : '';
+                    
+                    // 개선된 인사이트
+                    const enhancedInsight = `${insight}\n\n${categoryText}${zeroSalesText}`;
+                    
+                    return (
+                      <div className={`${insightBg} ${insightBorder} border rounded-lg p-3 flex items-start gap-2`}>
+                        <span className="text-lg">{insightIcon}</span>
+                        <div className="flex-1">
+                          <div className="text-xs font-semibold text-gray-700 mb-1">AI 분석</div>
+                          <div className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{enhancedInsight}</div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })()}

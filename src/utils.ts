@@ -1,4 +1,16 @@
-import { InventoryRowRaw, InventoryRow, SeasonInfo, SeasonType, YearBucket, SourceYearType, GraphDataRowRaw, GraphDataRow } from './types';
+import { InventoryRowRaw, InventoryRow, SeasonInfo, SeasonType, YearBucket, SourceYearType, GraphDataRowRaw, GraphDataRow, CategoryType } from './types';
+
+/**
+ * SUBCATEGORY 코드를 표준 카테고리로 매핑
+ */
+export function mapCategory(subcategory: string): CategoryType {
+  const code = subcategory.toUpperCase();
+  
+  if (code.startsWith('INN')) return 'INNER';
+  if (code.startsWith('OUT')) return 'OUTER';
+  if (code.startsWith('BOT')) return 'BOTTOM';
+  return '의류기타';
+}
 
 /**
  * CSV 파일에서 숫자 값을 안전하게 파싱
@@ -159,6 +171,9 @@ export function applyFxNormalization(row: InventoryRowRaw, seasonInfo: SeasonInf
   const cogsFx = applyFx(row.cogsMonth);
 
   const discountRateMonth = grossSalesFx > 0 ? 1 - (netSalesFx / grossSalesFx) : null;
+  
+  // 카테고리 매핑 추가
+  const mappedCategory = mapCategory(row.subcategory);
 
   return {
     ...row,
@@ -174,6 +189,7 @@ export function applyFxNormalization(row: InventoryRowRaw, seasonInfo: SeasonInf
     cogsFx,
     discountRateMonth,
     seasonInfo,
+    mappedCategory,
   };
 }
 
@@ -469,12 +485,28 @@ export function parseGraphCSV(csvText: string): GraphDataRow[] {
 import type { TargetDataRowRaw, TargetDataRow } from './types';
 
 export function parseTargetCSVRow(row: Record<string, string>): TargetDataRowRaw {
+  // PERIOD 변환: "Dec-25" -> "2025-12"
+  let period = parseString(row['PERIOD']);
+  if (period.includes('-')) {
+    const [month, year] = period.split('-');
+    const monthMap: Record<string, string> = {
+      'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+      'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+      'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+    };
+    const monthNum = monthMap[month] || '12';
+    const fullYear = year.length === 2 ? `20${year}` : year;
+    period = `${fullYear}-${monthNum}`;
+  }
+  
   return {
-    PERIOD: parseString(row['PERIOD']),
+    PERIOD: period,
     SEASON_NAME: parseString(row['SEASON_NAME']),
     SEASON: parseString(row['SEASON']),
     CATEGORY: parseString(row['CATEGORY']),
-    AMOUNT: parseNumber(row['AMOUNT']),
+    TAG_SALES: parseNumber(row['TAG_SALES']),
+    NET_SALES: parseNumber(row['NET_SALES']),
+    DISCOUNT_RATE: parseNumber(row['DISCOUNT_RATE']),
   };
 }
 
@@ -482,15 +514,25 @@ export function parseTargetCSVRow(row: Record<string, string>): TargetDataRowRaw
  * 과시즌 목표 CSV 데이터를 정규화하여 TargetDataRow로 변환
  */
 export function normalizeTargetDataRow(raw: TargetDataRowRaw, currentFwYear: number = 25): TargetDataRow {
-  // Season 코드에서 시즌 정보 추출 (예: "22FW" -> seasonInfo)
+  // Season 코드에서 시즌 정보 추출 (예: "22F" -> seasonInfo)
   const seasonInfo = parseSeason(raw.SEASON, currentFwYear);
+  
+  // 카테고리 표준화
+  let category: CategoryType;
+  const rawCategory = raw.CATEGORY.toUpperCase();
+  if (rawCategory === 'INNER') category = 'INNER';
+  else if (rawCategory === 'OUTER') category = 'OUTER';
+  else if (rawCategory === 'BOTTOM') category = 'BOTTOM';
+  else category = '의류기타';
   
   return {
     period: raw.PERIOD,
     seasonName: raw.SEASON_NAME,
     season: raw.SEASON,
-    category: raw.CATEGORY,
-    amount: raw.AMOUNT,
+    category,
+    tagSales: raw.TAG_SALES,
+    netSales: raw.NET_SALES,
+    discountRate: raw.DISCOUNT_RATE,
     seasonInfo,
   };
 }
