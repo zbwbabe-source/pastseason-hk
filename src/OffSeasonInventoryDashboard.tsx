@@ -273,6 +273,9 @@ export function OffSeasonInventoryDashboard({
   
   // 연차별 열림/닫힘 상태 관리 (Y1, Y2, Y3Plus 순서)
   const [yearBucketStates, setYearBucketStates] = useState<boolean[]>([true, true, true]);
+  
+  // AI 분석 섹션 토글 상태
+  const [aiAnalysisOpen, setAiAnalysisOpen] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -1352,16 +1355,27 @@ export function OffSeasonInventoryDashboard({
               }
               
               return (
-                <div className="mb-6 bg-gradient-to-r from-purple-50 to-indigo-50 border-l-4 border-purple-500 p-4 rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">🤖</span>
-                    <div className="flex-1">
-                      <div className="text-sm font-bold text-purple-900 mb-2">AI 분석 요약</div>
+                <div className="mb-6 bg-gradient-to-r from-purple-50 to-indigo-50 border-l-4 border-purple-500 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setAiAnalysisOpen(!aiAnalysisOpen)}
+                    className="w-full flex items-center justify-between p-4 hover:bg-purple-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">🤖</span>
+                      <div className="text-sm font-bold text-purple-900">AI 분석 요약</div>
+                    </div>
+                    <span className={`text-purple-600 transition-transform ${aiAnalysisOpen ? 'rotate-180' : ''}`}>
+                      ▾
+                    </span>
+                  </button>
+                  {aiAnalysisOpen && (
+                    <div className="px-4 pb-4">
                       <div className="text-sm text-gray-800 whitespace-pre-line leading-relaxed">
                         {analysisText}
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               );
             })()}
