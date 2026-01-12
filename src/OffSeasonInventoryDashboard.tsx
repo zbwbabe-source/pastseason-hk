@@ -44,11 +44,12 @@ type YearBucketSectionProps = {
 };
 
 const YearBucketSection: React.FC<YearBucketSectionProps> = ({ bucketLabel, categories, isOpen, onToggle }) => {
-  // 합계 계산
-  const totalTarget = Object.values(categories).reduce((sum, d) => sum + d.tagSalesTarget, 0);
-  const totalActual = Object.values(categories).reduce((sum, d) => sum + d.tagSalesActual, 0);
-  const totalStock2512Target = Object.values(categories).reduce((sum, d) => sum + d.stock2512Target, 0);
-  const totalStock2512Actual = Object.values(categories).reduce((sum, d) => sum + d.stock2512Actual, 0);
+  // 합계 계산 ('합계' 카테고리는 제외)
+  const categoryEntries = Object.entries(categories).filter(([cat]) => cat !== '합계');
+  const totalTarget = categoryEntries.reduce((sum, [_, d]) => sum + d.tagSalesTarget, 0);
+  const totalActual = categoryEntries.reduce((sum, [_, d]) => sum + d.tagSalesActual, 0);
+  const totalStock2512Target = categoryEntries.reduce((sum, [_, d]) => sum + d.stock2512Target, 0);
+  const totalStock2512Actual = categoryEntries.reduce((sum, [_, d]) => sum + d.stock2512Actual, 0);
   const totalAchievementRate = totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0;
   
   return (
@@ -96,7 +97,9 @@ const YearBucketSection: React.FC<YearBucketSectionProps> = ({ bucketLabel, cate
               </tr>
             </thead>
             <tbody>
-              {Object.entries(categories).map(([category, data]) => {
+              {Object.entries(categories)
+                .filter(([category]) => category !== '합계') // '합계'는 자동 계산되므로 제외
+                .map(([category, data]) => {
                 const achievementRate = data.tagSalesTarget > 0 
                   ? (data.tagSalesActual / data.tagSalesTarget) * 100 
                   : 0;
@@ -171,8 +174,8 @@ const YearBucketSection: React.FC<YearBucketSectionProps> = ({ bucketLabel, cate
                 <td className="px-4 py-2 text-right text-blue-900">-</td>
                 <td className="px-4 py-2 text-right text-blue-900 font-bold">
                   {(() => {
-                    const totalGross = Object.values(categories).reduce((sum, d) => sum + d.tagSalesActual, 0);
-                    const totalNet = Object.values(categories).reduce((sum, d) => sum + d.netSalesActual, 0);
+                    const totalGross = categoryEntries.reduce((sum, [_, d]) => sum + d.tagSalesActual, 0);
+                    const totalNet = categoryEntries.reduce((sum, [_, d]) => sum + d.netSalesActual, 0);
                     const rate = totalGross > 0 ? (1 - totalNet / totalGross) * 100 : 0;
                     return rate.toFixed(1) + '%';
                   })()}
@@ -1430,33 +1433,7 @@ export function OffSeasonInventoryDashboard({
                 data.discountRateTarget = totalTarget > 0 ? weightedTarget / totalTarget : 0;
               });
               
-              // 전체 합계 계산
-              const totalAll: CategoryData = {
-                tagSalesActual: 0,
-                netSalesActual: 0,
-                tagSalesTarget: 0,
-                discountRateTarget: 0,
-                discountRateActual: 0,
-                stock2511: 0,
-                stock2512Actual: 0,
-                stock2512Target: 0,
-              };
-              
-              ['INNER', 'OUTER', 'BOTTOM', '의류기타'].forEach(cat => {
-                const data = totalCategories[cat];
-                totalAll.tagSalesActual += data.tagSalesActual;
-                totalAll.netSalesActual += data.netSalesActual;
-                totalAll.tagSalesTarget += data.tagSalesTarget;
-                totalAll.stock2511 += data.stock2511;
-                totalAll.stock2512Actual += data.stock2512Actual;
-                totalAll.stock2512Target += data.stock2512Target;
-              });
-              
-              if (totalAll.tagSalesActual > 0) {
-                totalAll.discountRateActual = 1 - (totalAll.netSalesActual / totalAll.tagSalesActual);
-              }
-              
-              totalCategories['합계'] = totalAll;
+              // YearBucketSection 컴포넌트가 자동으로 합계를 계산하므로 '합계'를 추가하지 않음
               
               return (
                 <YearBucketSection 
