@@ -172,8 +172,8 @@ export function applyFxNormalization(row: InventoryRowRaw, seasonInfo: SeasonInf
 
   const discountRateMonth = grossSalesFx > 0 ? 1 - (netSalesFx / grossSalesFx) : null;
   
-  // 카테고리 매핑 추가
-  const mappedCategory = mapCategory(row.subcategory);
+  // 카테고리 매핑: CATEGORY 컬럼(N열) 기준으로 매핑
+  const mappedCategory = mapCategory(row.category);
 
   return {
     ...row,
