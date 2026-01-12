@@ -1381,21 +1381,98 @@ export function OffSeasonInventoryDashboard({
                 const [selectedCategory, setSelectedCategory] = useState<string>('전체');
                 const [showAll, setShowAll] = useState(false);
                 
+                // 정렬 상태 관리
+                const [sortConfig, setSortConfig] = useState<{ column: string | null; direction: 'asc' | 'desc' }>({
+                  column: 'stockTagK', // 기본값: 택가재고 내림차순
+                  direction: 'desc',
+                });
+                
                 // 카테고리 필터링
                 const filteredItems = selectedCategory === '전체' 
                   ? items 
                   : items.filter(item => item.mappedCategory === selectedCategory);
                 
-                // 기본 5개, 더보기 클릭 시 전체 표시
-                const displayItems = showAll ? filteredItems : filteredItems.slice(0, 5);
+                // 정렬 함수
+                const handleSort = (column: string) => {
+                  setSortConfig(prev => {
+                    if (prev.column === column) {
+                      // 같은 컬럼 클릭 시 정렬 방향 전환
+                      return { column, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+                    } else {
+                      // 다른 컬럼 클릭 시 내림차순으로 시작
+                      return { column, direction: 'desc' };
+                    }
+                  });
+                };
                 
-                // 필터링된 항목의 합계 계산
-                const totalStockTag = filteredItems.reduce((sum, item) => sum + item.stockTagK, 0);
-                const totalMonthGross = filteredItems.reduce((sum, item) => sum + item.monthGrossK, 0);
-                const totalMonthNet = filteredItems.reduce((sum, item) => sum + item.monthNetK, 0);
+                // 정렬된 아이템 반환
+                const getSortedItems = (itemsToSort: typeof filteredItems) => {
+                  if (!sortConfig.column) return itemsToSort;
+                  
+                  const sorted = [...itemsToSort].sort((a, b) => {
+                    let aValue: number | null;
+                    let bValue: number | null;
+                    
+                    switch (sortConfig.column) {
+                      case 'stockTagK':
+                        aValue = a.stockTagK;
+                        bValue = b.stockTagK;
+                        break;
+                      case 'monthGrossK':
+                        aValue = a.monthGrossK;
+                        bValue = b.monthGrossK;
+                        break;
+                      case 'monthNetK':
+                        aValue = a.monthNetK;
+                        bValue = b.monthNetK;
+                        break;
+                      case 'discountRate':
+                        aValue = a.discountRate;
+                        bValue = b.discountRate;
+                        break;
+                      case 'inventoryDays':
+                        aValue = a.inventoryDays;
+                        bValue = b.inventoryDays;
+                        break;
+                      default:
+                        return 0;
+                    }
+                    
+                    // null 처리: null은 항상 뒤로
+                    if (aValue === null && bValue === null) return 0;
+                    if (aValue === null) return 1;
+                    if (bValue === null) return -1;
+                    
+                    const diff = aValue - bValue;
+                    return sortConfig.direction === 'asc' ? diff : -diff;
+                  });
+                  
+                  return sorted;
+                };
+                
+                // 정렬된 필터링된 아이템
+                const sortedFilteredItems = getSortedItems(filteredItems);
+                
+                // 기본 5개, 더보기 클릭 시 전체 표시
+                const displayItems = showAll ? sortedFilteredItems : sortedFilteredItems.slice(0, 5);
+                
+                // 정렬 아이콘 렌더링 함수
+                const renderSortIcon = (column: string) => {
+                  if (sortConfig.column !== column) {
+                    return <span className="text-gray-300 ml-1">↕</span>;
+                  }
+                  return sortConfig.direction === 'asc' 
+                    ? <span className="text-blue-600 ml-1">↑</span>
+                    : <span className="text-blue-600 ml-1">↓</span>;
+                };
+                
+                // 필터링된 항목의 합계 계산 (정렬된 필터링된 아이템 사용)
+                const totalStockTag = sortedFilteredItems.reduce((sum, item) => sum + item.stockTagK, 0);
+                const totalMonthGross = sortedFilteredItems.reduce((sum, item) => sum + item.monthGrossK, 0);
+                const totalMonthNet = sortedFilteredItems.reduce((sum, item) => sum + item.monthNetK, 0);
                 const totalDiscountRate = totalMonthGross > 0 ? (1 - totalMonthNet / totalMonthGross) * 100 : 0;
-                const totalInventoryDays = filteredItems.length > 0 
-                  ? filteredItems.reduce((sum, item) => sum + (item.inventoryDays || 0), 0) / filteredItems.length 
+                const totalInventoryDays = sortedFilteredItems.length > 0 
+                  ? sortedFilteredItems.reduce((sum, item) => sum + (item.inventoryDays || 0), 0) / sortedFilteredItems.length 
                   : 0;
                 
                 // 카테고리별 개수 집계
@@ -1453,11 +1530,51 @@ export function OffSeasonInventoryDashboard({
                             <th className="px-2 py-2 text-left text-gray-700 font-semibold">SUBCATEGORY</th>
                             <th className="px-2 py-2 text-left text-gray-700 font-semibold">ITEM DESC2</th>
                             <th className="px-2 py-2 text-center text-gray-700 font-semibold">시즌</th>
-                            <th className="px-2 py-2 text-right text-gray-700 font-semibold">택가 재고</th>
-                            <th className="px-2 py-2 text-right text-gray-700 font-semibold">{periodLabel} 택가매출</th>
-                            <th className="px-2 py-2 text-right text-gray-700 font-semibold">{periodLabel} 실판매출</th>
-                            <th className="px-2 py-2 text-right text-gray-700 font-semibold">할인율 (%)</th>
-                            <th className="px-2 py-2 text-right text-gray-700 font-semibold">재고일수 (일)</th>
+                            <th 
+                              className="px-2 py-2 text-right text-gray-700 font-semibold cursor-pointer hover:bg-gray-100 select-none"
+                              onClick={() => handleSort('stockTagK')}
+                            >
+                              <div className="flex items-center justify-end">
+                                택가 재고
+                                {renderSortIcon('stockTagK')}
+                              </div>
+                            </th>
+                            <th 
+                              className="px-2 py-2 text-right text-gray-700 font-semibold cursor-pointer hover:bg-gray-100 select-none"
+                              onClick={() => handleSort('monthGrossK')}
+                            >
+                              <div className="flex items-center justify-end">
+                                {periodLabel} 택가매출
+                                {renderSortIcon('monthGrossK')}
+                              </div>
+                            </th>
+                            <th 
+                              className="px-2 py-2 text-right text-gray-700 font-semibold cursor-pointer hover:bg-gray-100 select-none"
+                              onClick={() => handleSort('monthNetK')}
+                            >
+                              <div className="flex items-center justify-end">
+                                {periodLabel} 실판매출
+                                {renderSortIcon('monthNetK')}
+                              </div>
+                            </th>
+                            <th 
+                              className="px-2 py-2 text-right text-gray-700 font-semibold cursor-pointer hover:bg-gray-100 select-none"
+                              onClick={() => handleSort('discountRate')}
+                            >
+                              <div className="flex items-center justify-end">
+                                할인율 (%)
+                                {renderSortIcon('discountRate')}
+                              </div>
+                            </th>
+                            <th 
+                              className="px-2 py-2 text-right text-gray-700 font-semibold cursor-pointer hover:bg-gray-100 select-none"
+                              onClick={() => handleSort('inventoryDays')}
+                            >
+                              <div className="flex items-center justify-end">
+                                재고일수 (일)
+                                {renderSortIcon('inventoryDays')}
+                              </div>
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1496,10 +1613,10 @@ export function OffSeasonInventoryDashboard({
                             </tr>
                           ))}
                           {/* 필터링된 항목 합계 행 */}
-                          {filteredItems.length > 0 && (
+                          {sortedFilteredItems.length > 0 && (
                             <tr className="bg-indigo-50 border-t-2 border-indigo-300 font-semibold">
                               <td colSpan={6} className="px-2 py-2 text-left text-indigo-900 whitespace-nowrap">
-                                {selectedCategory === '전체' ? '합계' : `${selectedCategory} 합계`} ({filteredItems.length}개)
+                                {selectedCategory === '전체' ? '합계' : `${selectedCategory} 합계`} ({sortedFilteredItems.length}개)
                               </td>
                               <td className="px-2 py-2 text-right text-indigo-900 font-bold whitespace-nowrap">
                                 {totalStockTag.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
@@ -1522,14 +1639,14 @@ export function OffSeasonInventoryDashboard({
                       </table>
                     </div>
                     
-                    {filteredItems.length > 5 && (
+                    {sortedFilteredItems.length > 5 && (
                       <div className="mt-3 text-center">
                         <button
                           type="button"
                           onClick={() => setShowAll(!showAll)}
                           className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
                         >
-                          {showAll ? '접기 ▲' : `더보기 (${filteredItems.length - 5}개 더) ▼`}
+                          {showAll ? '접기 ▲' : `더보기 (${sortedFilteredItems.length - 5}개 더) ▼`}
                         </button>
                       </div>
                     )}
