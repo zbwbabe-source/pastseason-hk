@@ -278,7 +278,7 @@ export function OffSeasonInventoryDashboard({
   const [yearBucketStates, setYearBucketStates] = useState<boolean[]>([true, true, true]);
   
   // AI 분석 섹션 토글 상태
-  const [aiAnalysisOpen, setAiAnalysisOpen] = useState(false);
+  const [aiAnalysisOpen, setAiAnalysisOpen] = useState(true);
   
   // 전체 과시즌 합계 토글 상태
   const [totalSectionOpen, setTotalSectionOpen] = useState(true);
@@ -1225,12 +1225,14 @@ export function OffSeasonInventoryDashboard({
                 type="button"
                 onClick={() => {
                   // 현재 하나라도 열려있으면 전체 닫기, 모두 닫혀있으면 전체 열기
-                  const hasOpen = yearBucketStates.some(state => state);
-                  setYearBucketStates(hasOpen ? [false, false, false] : [true, true, true]);
+                  const hasOpen = yearBucketStates.some(state => state) || totalSectionOpen;
+                  const newState = !hasOpen;
+                  setYearBucketStates([newState, newState, newState]);
+                  setTotalSectionOpen(newState);
                 }}
                 className="px-4 py-2 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-300 rounded-lg hover:bg-purple-100 transition"
               >
-                {yearBucketStates.some(state => state) ? '전체 접기' : '전체 펼치기'}
+                {(yearBucketStates.some(state => state) || totalSectionOpen) ? '전체 접기' : '전체 펼치기'}
               </button>
             </div>
             
