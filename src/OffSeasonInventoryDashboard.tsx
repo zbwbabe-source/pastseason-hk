@@ -759,6 +759,9 @@ export function OffSeasonInventoryDashboard({
       tagSalesTarget: number;
       discountRateTarget: number;
       discountRateActual: number;
+      stock2511: number; // 2511 기말재고 (기초)
+      stock2512Actual: number; // 2512 기말재고 실적
+      stock2512Target: number; // 2512 기말재고 목표 (기초 - 판매목표)
     };
     
     const result: Record<string, Record<string, CategoryData>> = {};
@@ -766,14 +769,30 @@ export function OffSeasonInventoryDashboard({
     // 연차별 (Y1, Y2, Y3Plus)로 처리
     ['Y1', 'Y2', 'Y3Plus'].forEach(bucket => {
       result[bucket] = {
-        'INNER': { tagSalesActual: 0, netSalesActual: 0, tagSalesTarget: 0, discountRateTarget: 0, discountRateActual: 0 },
-        'OUTER': { tagSalesActual: 0, netSalesActual: 0, tagSalesTarget: 0, discountRateTarget: 0, discountRateActual: 0 },
-        'BOTTOM': { tagSalesActual: 0, netSalesActual: 0, tagSalesTarget: 0, discountRateTarget: 0, discountRateActual: 0 },
-        '의류기타': { tagSalesActual: 0, netSalesActual: 0, tagSalesTarget: 0, discountRateTarget: 0, discountRateActual: 0 },
+        'INNER': { tagSalesActual: 0, netSalesActual: 0, tagSalesTarget: 0, discountRateTarget: 0, discountRateActual: 0, stock2511: 0, stock2512Actual: 0, stock2512Target: 0 },
+        'OUTER': { tagSalesActual: 0, netSalesActual: 0, tagSalesTarget: 0, discountRateTarget: 0, discountRateActual: 0, stock2511: 0, stock2512Actual: 0, stock2512Target: 0 },
+        'BOTTOM': { tagSalesActual: 0, netSalesActual: 0, tagSalesTarget: 0, discountRateTarget: 0, discountRateActual: 0, stock2511: 0, stock2512Actual: 0, stock2512Target: 0 },
+        '의류기타': { tagSalesActual: 0, netSalesActual: 0, tagSalesTarget: 0, discountRateTarget: 0, discountRateActual: 0, stock2511: 0, stock2512Actual: 0, stock2512Target: 0 },
       };
     });
     
-    // 실적 집계 (graphData에서 2512 과시즌 FW, HK+MO)
+    // 2511 기말재고 집계 (기초)
+    graphData
+      .filter(row => 
+        row.period === '2511' && 
+        (row.country === 'HK' || row.country === 'MO') && 
+        isOffSeasonFW(row)
+      )
+      .forEach(row => {
+        const bucket = row.seasonInfo.yearBucket;
+        const category = row.mappedCategory;
+        
+        if (bucket in result && category in result[bucket]) {
+          result[bucket][category].stock2511 += row.stockPriceFx;
+        }
+      });
+    
+    // 2512 실적 집계 (판매 + 재고)
     graphData
       .filter(row => 
         row.period === '2512' && 
@@ -787,6 +806,7 @@ export function OffSeasonInventoryDashboard({
         if (bucket in result && category in result[bucket]) {
           result[bucket][category].tagSalesActual += row.grossSalesFx;
           result[bucket][category].netSalesActual += row.netSalesFx;
+          result[bucket][category].stock2512Actual += row.stockPriceFx;
         }
       });
     
@@ -801,13 +821,15 @@ export function OffSeasonInventoryDashboard({
       }
     });
     
-    // 할인율 실적 계산
+    // 할인율 실적 및 목표재고 계산
     Object.keys(result).forEach(bucket => {
       Object.keys(result[bucket]).forEach(category => {
         const data = result[bucket][category];
         if (data.tagSalesActual > 0) {
           data.discountRateActual = 1 - (data.netSalesActual / data.tagSalesActual);
         }
+        // 목표재고 = 기초재고 - 판매목표
+        data.stock2512Target = data.stock2511 - data.tagSalesTarget;
       });
     });
     
@@ -882,6 +904,8 @@ export function OffSeasonInventoryDashboard({
                           <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">할인율 목표</th>
                           <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">할인율 실적</th>
                           <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">할인율 차이</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">목표 재고</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">실적 재고</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -917,6 +941,12 @@ export function OffSeasonInventoryDashboard({
                                 discountDiff > 0 ? 'text-red-600' : 'text-green-600'
                               }`}>
                                 {discountDiff > 0 ? '+' : ''}{discountDiff.toFixed(1)}%p
+                              </td>
+                              <td className="px-4 py-2 text-right text-blue-700 font-medium">
+                                {(data.stock2512Target / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
+                              </td>
+                              <td className="px-4 py-2 text-right text-blue-900 font-semibold">
+                                {(data.stock2512Actual / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
                               </td>
                             </tr>
                           );
