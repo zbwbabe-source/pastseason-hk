@@ -1287,9 +1287,6 @@ export function OffSeasonInventoryDashboard({
               const sortedCategories = Object.entries(categoryPerformance)
                 .sort((a, b) => b[1].achievement - a[1].achievement);
               
-              const bestCategory = sortedCategories[0];
-              const worstCategory = sortedCategories[sortedCategories.length - 1];
-              
               // 분석 텍스트 생성
               let analysisText = '';
               
@@ -1331,15 +1328,27 @@ export function OffSeasonInventoryDashboard({
               
               // 카테고리별 분석
               analysisText += '🎯 카테고리별 분석: ';
-              analysisText += `${bestCategory[0]}가 ${bestCategory[1].achievement.toFixed(1)}% 달성으로 가장 우수하며, `;
-              analysisText += `${worstCategory[0]}는 ${worstCategory[1].achievement.toFixed(1)}% 달성으로 개선이 필요합니다. `;
               
-              // 재고 증감 분석
-              const stockIncreaseCategories = sortedCategories.filter(([_, data]) => data.stockVariance > 500);
-              if (stockIncreaseCategories.length > 0) {
-                analysisText += `${stockIncreaseCategories.map(([cat]) => cat).join(', ')} 카테고리는 목표 대비 재고가 증가하여 추가 소진 전략이 시급합니다.`;
-              } else {
-                analysisText += '대부분 카테고리에서 재고 감축 목표를 달성했습니다.';
+              // 의류기타 성과 분석
+              const etcPerformance = categoryPerformance['의류기타'];
+              if (etcPerformance && etcPerformance.achievement > 100) {
+                analysisText += `비니 판매 증가로 의류기타가 ${etcPerformance.achievement.toFixed(1)}% 목표 초과 달성했습니다. `;
+              }
+              
+              // BOTTOM 카테고리 성과 분석
+              const bottomPerformance = categoryPerformance['BOTTOM'];
+              if (bottomPerformance && bottomPerformance.achievement < 50) {
+                analysisText += `과시즌 바지(BOTTOM)는 ${bottomPerformance.achievement.toFixed(1)}% 달성으로 전 연차 공통적으로 실적이 부진합니다. `;
+              }
+              
+              // 기타 카테고리 요약
+              const otherCategories = sortedCategories.filter(([cat]) => cat !== '의류기타' && cat !== 'BOTTOM');
+              if (otherCategories.length > 0) {
+                const bestOther = otherCategories[0];
+                const worstOther = otherCategories[otherCategories.length - 1];
+                if (bestOther[0] !== worstOther[0]) {
+                  analysisText += `${bestOther[0]}는 ${bestOther[1].achievement.toFixed(1)}%로 양호하나, ${worstOther[0]}는 ${worstOther[1].achievement.toFixed(1)}%로 개선이 필요합니다.`;
+                }
               }
               
               return (
