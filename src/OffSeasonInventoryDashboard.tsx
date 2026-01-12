@@ -1371,6 +1371,29 @@ export function OffSeasonInventoryDashboard({
                 }
               }
               
+              analysisText += '\n\n';
+              
+              // 정체재고 수량 분석
+              const totalStagnantQty = stagnantByBucket.Y1.reduce((sum, item) => sum + item.stockQty, 0) +
+                                       stagnantByBucket.Y2.reduce((sum, item) => sum + item.stockQty, 0) +
+                                       stagnantByBucket.Y3Plus.reduce((sum, item) => sum + item.stockQty, 0);
+              const y1StagnantQty = stagnantByBucket.Y1.reduce((sum, item) => sum + item.stockQty, 0);
+              const y2StagnantQty = stagnantByBucket.Y2.reduce((sum, item) => sum + item.stockQty, 0);
+              const y3StagnantQty = stagnantByBucket.Y3Plus.reduce((sum, item) => sum + item.stockQty, 0);
+              
+              analysisText += '📦 정체재고 수량: ';
+              analysisText += `총 ${totalStagnantQty.toLocaleString('ko-KR')}개(QTY)의 정체재고가 있으며, `;
+              analysisText += `1년차 ${y1StagnantQty.toLocaleString('ko-KR')}개, `;
+              analysisText += `2년차 ${y2StagnantQty.toLocaleString('ko-KR')}개, `;
+              analysisText += `3년차 이상 ${y3StagnantQty.toLocaleString('ko-KR')}개로 구성되어 있습니다. `;
+              if (y3StagnantQty > y1StagnantQty && y3StagnantQty > y2StagnantQty) {
+                analysisText += '3년차 이상 재고가 가장 많아 즉각적인 처분이 필요합니다.';
+              } else if (y2StagnantQty > y1StagnantQty) {
+                analysisText += '2년차 재고가 많아 할인 프로모션을 통한 소진이 시급합니다.';
+              } else {
+                analysisText += '1년차 재고가 상대적으로 많아 조기 할인 전략을 검토해야 합니다.';
+              }
+              
               return (
                 <div className="mb-6 bg-gradient-to-r from-purple-50 to-indigo-50 border-l-4 border-purple-500 rounded-lg overflow-hidden">
                   <button
@@ -2195,6 +2218,14 @@ const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ ite
   const [open, setOpen] = useState(true);
   const [showItems, setShowItems] = useState(false);
   
+  // 각 연차별 토글 상태 관리
+  const [bucketOpen, setBucketOpen] = useState<Record<YearBucket, boolean>>({
+    Y1: true,
+    Y2: true,
+    Y3Plus: true,
+    InSeason: true,
+  });
+  
   // 각 연차별 정렬 상태 관리
   const [sortConfig, setSortConfig] = useState<Record<YearBucket, { column: string | null; direction: 'asc' | 'desc' }>>({
     Y1: { column: 'stockTagK', direction: 'desc' }, // 기본값: 택가재고 내림차순
@@ -2465,12 +2496,22 @@ const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ ite
             </div>
             
             {/* 품번 테이블들 */}
-            {showItems && (['Y1', 'Y2', 'Y3Plus'] as const).map((bucket) => {
+            {(['Y1', 'Y2', 'Y3Plus'] as const).map((bucket) => {
               const items = itemsByBucket[bucket];
               if (items.length === 0) return null;
 
               const sortedItems = getSortedItems(bucket, items);
               const currentSort = sortConfig[bucket];
+              const isBucketOpen = bucketOpen[bucket];
+              
+              // 연차별 합계 계산
+              const bucketTotalStockQty = items.reduce((sum, item) => sum + item.stockQty, 0);
+              const bucketTotalStockTagK = stagnantStockByBucket[bucket];
+              const bucketTotalMonthGrossK = items.reduce((sum, item) => sum + item.monthGrossK, 0);
+              const bucketTotalMonthNetK = items.reduce((sum, item) => sum + item.monthNetK, 0);
+              const bucketAvgDiscountRate = bucketTotalMonthGrossK > 0 
+                ? (1 - bucketTotalMonthNetK / bucketTotalMonthGrossK) * 100 
+                : null;
 
               // 정렬 아이콘 렌더링 함수
               const renderSortIcon = (column: string) => {
@@ -2484,10 +2525,14 @@ const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ ite
 
               return (
                 <div key={bucket} className="mb-6 last:mb-0">
-                  {/* 섹션 헤더 */}
-                  <div className="mb-2 flex items-center justify-between">
+                  {/* 섹션 헤더 (토글 가능) */}
+                  <button
+                    type="button"
+                    onClick={() => setBucketOpen(prev => ({ ...prev, [bucket]: !prev[bucket] }))}
+                    className="w-full mb-2 flex items-center justify-between hover:bg-gray-50 p-2 rounded transition-colors"
+                  >
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-gray-900">
+                      <span className={`text-sm font-semibold text-gray-900 transition-transform ${isBucketOpen ? '' : 'opacity-70'}`}>
                         {yearBucketLabel[bucket]}
                       </span>
                       <span className="text-xs text-gray-500">총 {items.length}개 항목</span>
@@ -2497,119 +2542,143 @@ const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ ite
                         </span>
                       )}
                     </div>
-                    <span className="text-xs text-gray-500">단위: 1K HKD</span>
-                  </div>
+                    <div className="flex items-center gap-3">
+                      {/* 접었을 때 합계 표시 */}
+                      {!isBucketOpen && (
+                        <div className="flex items-center gap-4 text-xs text-gray-600">
+                          <span>재고(QTY): <span className="font-semibold">{bucketTotalStockQty.toLocaleString('ko-KR')}</span></span>
+                          <span>택가재고: <span className="font-semibold text-red-500">{Math.round(bucketTotalStockTagK).toLocaleString('ko-KR')}K</span></span>
+                          <span>택가매출: <span className="font-semibold">{formatNumber(bucketTotalMonthGrossK)}</span></span>
+                          <span>실판매출: <span className="font-semibold">{formatNumber(bucketTotalMonthNetK)}</span></span>
+                          {bucketAvgDiscountRate !== null && (
+                            <span>할인율: <span className="font-semibold">{formatPercent(bucketAvgDiscountRate / 100)}</span></span>
+                          )}
+                        </div>
+                      )}
+                      <span className={`text-xs text-gray-400 transition-transform ${isBucketOpen ? 'rotate-180' : ''}`}>
+                        ▾
+                      </span>
+                    </div>
+                  </button>
+                  
+                  {!isBucketOpen && (
+                    <div className="text-xs text-gray-500 ml-2 mb-2">단위: 1K HKD</div>
+                  )}
 
-                  {/* 테이블 */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs table-fixed" style={{ tableLayout: 'fixed' }}>
-                      <colgroup>
-                        <col style={{ width: '40px' }} />
-                        <col style={{ width: '120px' }} />
-                        <col style={{ width: '140px' }} />
-                        <col style={{ width: '200px' }} />
-                        <col style={{ width: '64px' }} />
-                        <col style={{ width: '70px' }} />
-                        <col style={{ width: '90px' }} />
-                        <col style={{ width: '110px' }} />
-                        <col style={{ width: '110px' }} />
-                        <col style={{ width: '80px' }} />
-                        <col style={{ width: '90px' }} />
-                      </colgroup>
-                      <thead>
-                        <tr className="border-b border-gray-200 bg-gray-50 text-[11px] text-gray-500">
-                          <th className="px-2 py-1 text-right w-10">순위</th>
-                          <th className="px-2 py-1 text-left">Item Code</th>
-                          <th className="px-2 py-1 text-left">SUBCATEGORY</th>
-                          <th className="px-2 py-1 text-left">ITEM DESC2</th>
-                          <th className="px-2 py-1 text-center w-16">시즌</th>
-                          <th className="px-2 py-1 text-right">재고 (QTY)</th>
-                          <th 
-                            className="px-2 py-1 text-right cursor-pointer hover:bg-gray-100 select-none"
-                            onClick={() => handleSort(bucket, 'stockTagK')}
-                          >
-                            <div className="flex items-center justify-end">
-                              택가 재고
-                              {renderSortIcon('stockTagK')}
-                            </div>
-                          </th>
-                          <th 
-                            className="px-2 py-1 text-right cursor-pointer hover:bg-gray-100 select-none"
-                            onClick={() => handleSort(bucket, 'monthGrossK')}
-                          >
-                            <div className="flex items-center justify-end">
-                              {periodLabel} 택가매출
-                              {renderSortIcon('monthGrossK')}
-                            </div>
-                          </th>
-                          <th 
-                            className="px-2 py-1 text-right cursor-pointer hover:bg-gray-100 select-none"
-                            onClick={() => handleSort(bucket, 'monthNetK')}
-                          >
-                            <div className="flex items-center justify-end">
-                              {periodLabel} 실판매출
-                              {renderSortIcon('monthNetK')}
-                            </div>
-                          </th>
-                          <th 
-                            className="px-2 py-1 text-right cursor-pointer hover:bg-gray-100 select-none"
-                            onClick={() => handleSort(bucket, 'discountRate')}
-                          >
-                            <div className="flex items-center justify-end">
-                              할인율 (%)
-                              {renderSortIcon('discountRate')}
-                            </div>
-                          </th>
-                          <th 
-                            className="px-2 py-1 text-right cursor-pointer hover:bg-gray-100 select-none"
-                            onClick={() => handleSort(bucket, 'inventoryDays')}
-                          >
-                            <div className="flex items-center justify-end">
-                              재고일수 (일)
-                              {renderSortIcon('inventoryDays')}
-                            </div>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sortedItems.slice(0, 3).map((item, index) => (
-                          <tr key={item.itemCode} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
-                            <td className="px-2 py-1 text-right text-[11px] text-gray-500 w-10">
-                              {index + 1}
-                            </td>
-                            <td className="px-2 py-1 text-left text-gray-700 font-medium">{item.itemCode}</td>
-                            <td className="px-2 py-1 text-left text-gray-700">{item.subcategory}</td>
-                            <td className="px-2 py-1 text-left text-gray-700">{item.itemDesc2 || '-'}</td>
-                            <td className="px-2 py-1 text-center text-gray-700 w-16">{item.seasonCode}</td>
-                            <td className="px-2 py-1 text-right text-gray-700">
-                              {item.stockQty.toLocaleString('ko-KR')}
-                            </td>
-                            <td className="px-2 py-1 text-right text-red-500 font-semibold">
-                              {Math.round(item.stockTagK).toLocaleString('ko-KR')}
-                            </td>
-                            <td className="px-2 py-1 text-right text-gray-700">
-                              {formatNumber(item.monthGrossK)}
-                            </td>
-                            <td className="px-2 py-1 text-right text-gray-700">
-                              {formatNumber(item.monthNetK)}
-                            </td>
-                            <td className="px-2 py-1 text-right text-gray-700">
-                              {item.discountRate !== null ? formatPercent(item.discountRate) : '-'}
-                            </td>
-                            <td className={`px-2 py-1 text-right font-semibold ${item.inventoryDays !== null && item.inventoryDays > 365 ? 'text-red-500' : 'text-gray-700'}`}>
-                              {item.inventoryDays !== null ? `${Math.round(item.inventoryDays)}일` : '-'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {/* 더보기/접기 토글 버튼 */}
-                  {items.length > 3 && (
-                    <StagnantBucketToggle
-                      items={sortedItems}
-                      periodLabel={periodLabel}
-                    />
+                  {/* 테이블 (접었을 때는 표시 안 함) */}
+                  {isBucketOpen && showItems && (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs table-fixed" style={{ tableLayout: 'fixed' }}>
+                          <colgroup>
+                            <col style={{ width: '40px' }} />
+                            <col style={{ width: '120px' }} />
+                            <col style={{ width: '140px' }} />
+                            <col style={{ width: '200px' }} />
+                            <col style={{ width: '64px' }} />
+                            <col style={{ width: '70px' }} />
+                            <col style={{ width: '90px' }} />
+                            <col style={{ width: '110px' }} />
+                            <col style={{ width: '110px' }} />
+                            <col style={{ width: '80px' }} />
+                            <col style={{ width: '90px' }} />
+                          </colgroup>
+                          <thead>
+                            <tr className="border-b border-gray-200 bg-gray-50 text-[11px] text-gray-500">
+                              <th className="px-2 py-1 text-right w-10">순위</th>
+                              <th className="px-2 py-1 text-left">Item Code</th>
+                              <th className="px-2 py-1 text-left">SUBCATEGORY</th>
+                              <th className="px-2 py-1 text-left">ITEM DESC2</th>
+                              <th className="px-2 py-1 text-center w-16">시즌</th>
+                              <th className="px-2 py-1 text-right">재고 (QTY)</th>
+                              <th 
+                                className="px-2 py-1 text-right cursor-pointer hover:bg-gray-100 select-none"
+                                onClick={() => handleSort(bucket, 'stockTagK')}
+                              >
+                                <div className="flex items-center justify-end">
+                                  택가 재고
+                                  {renderSortIcon('stockTagK')}
+                                </div>
+                              </th>
+                              <th 
+                                className="px-2 py-1 text-right cursor-pointer hover:bg-gray-100 select-none"
+                                onClick={() => handleSort(bucket, 'monthGrossK')}
+                              >
+                                <div className="flex items-center justify-end">
+                                  {periodLabel} 택가매출
+                                  {renderSortIcon('monthGrossK')}
+                                </div>
+                              </th>
+                              <th 
+                                className="px-2 py-1 text-right cursor-pointer hover:bg-gray-100 select-none"
+                                onClick={() => handleSort(bucket, 'monthNetK')}
+                              >
+                                <div className="flex items-center justify-end">
+                                  {periodLabel} 실판매출
+                                  {renderSortIcon('monthNetK')}
+                                </div>
+                              </th>
+                              <th 
+                                className="px-2 py-1 text-right cursor-pointer hover:bg-gray-100 select-none"
+                                onClick={() => handleSort(bucket, 'discountRate')}
+                              >
+                                <div className="flex items-center justify-end">
+                                  할인율 (%)
+                                  {renderSortIcon('discountRate')}
+                                </div>
+                              </th>
+                              <th 
+                                className="px-2 py-1 text-right cursor-pointer hover:bg-gray-100 select-none"
+                                onClick={() => handleSort(bucket, 'inventoryDays')}
+                              >
+                                <div className="flex items-center justify-end">
+                                  재고일수 (일)
+                                  {renderSortIcon('inventoryDays')}
+                                </div>
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sortedItems.slice(0, 3).map((item, index) => (
+                              <tr key={item.itemCode} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                                <td className="px-2 py-1 text-right text-[11px] text-gray-500 w-10">
+                                  {index + 1}
+                                </td>
+                                <td className="px-2 py-1 text-left text-gray-700 font-medium">{item.itemCode}</td>
+                                <td className="px-2 py-1 text-left text-gray-700">{item.subcategory}</td>
+                                <td className="px-2 py-1 text-left text-gray-700">{item.itemDesc2 || '-'}</td>
+                                <td className="px-2 py-1 text-center text-gray-700 w-16">{item.seasonCode}</td>
+                                <td className="px-2 py-1 text-right text-gray-700">
+                                  {item.stockQty.toLocaleString('ko-KR')}
+                                </td>
+                                <td className="px-2 py-1 text-right text-red-500 font-semibold">
+                                  {Math.round(item.stockTagK).toLocaleString('ko-KR')}
+                                </td>
+                                <td className="px-2 py-1 text-right text-gray-700">
+                                  {formatNumber(item.monthGrossK)}
+                                </td>
+                                <td className="px-2 py-1 text-right text-gray-700">
+                                  {formatNumber(item.monthNetK)}
+                                </td>
+                                <td className="px-2 py-1 text-right text-gray-700">
+                                  {item.discountRate !== null ? formatPercent(item.discountRate) : '-'}
+                                </td>
+                                <td className={`px-2 py-1 text-right font-semibold ${item.inventoryDays !== null && item.inventoryDays > 365 ? 'text-red-500' : 'text-gray-700'}`}>
+                                  {item.inventoryDays !== null ? `${Math.round(item.inventoryDays)}일` : '-'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {/* 더보기/접기 토글 버튼 */}
+                      {items.length > 3 && (
+                        <StagnantBucketToggle
+                          items={sortedItems}
+                          periodLabel={periodLabel}
+                        />
+                      )}
+                    </>
                   )}
                 </div>
               );
