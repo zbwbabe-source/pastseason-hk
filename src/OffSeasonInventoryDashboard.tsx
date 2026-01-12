@@ -849,19 +849,19 @@ export function OffSeasonInventoryDashboard({
 
   type StagnantByBucket = Record<YearBucket, StagnantItem[]>;
 
-  // 의류기타 카테고리 품번별 분석 (CY, OFF-SEASON FW, HK/MC만)
-  const wearEtcAnalysis = useMemo(() => {
+  // 품번별 분석 (CY, OFF-SEASON FW, HK/MC만) - 모든 카테고리
+  const itemAnalysis = useMemo(() => {
     const cyFiltered = filteredData.filter(
       row => row.sourceYearType === 'CY' && 
              isOffSeasonFW(row) && 
-             (row.country === 'HK' || row.country === 'MC') &&
-             row.mappedCategory === '의류기타'
+             (row.country === 'HK' || row.country === 'MC')
     );
 
     // 품번별로 집계
     const itemMap = new Map<string, {
       itemCode: string;
-      mappedCategory: string; // 상위 카테고리 추가
+      mappedCategory: string; // INNER/OUTER/BOTTOM/의류기타
+      subcategory: string; // SUBCATEGORY 축약형 (O열)
       subcategoryName: string;
       itemDesc2: string | null;
       seasonCode: string;
@@ -883,6 +883,7 @@ export function OffSeasonInventoryDashboard({
         itemMap.set(row.itemCode, {
           itemCode: row.itemCode,
           mappedCategory: row.mappedCategory,
+          subcategory: row.subcategory, // O열 축약형
           subcategoryName: row.subcategoryName,
           itemDesc2: row.itemDesc2,
           seasonCode: row.seasonInfo.seasonCode,
@@ -895,9 +896,12 @@ export function OffSeasonInventoryDashboard({
       }
     });
 
-    // StagnantItem 형식으로 변환 (mappedCategory 포함)
-    type WearEtcItem = StagnantItem & { mappedCategory: string };
-    const items: WearEtcItem[] = [];
+    // Item 형식으로 변환 (mappedCategory와 subcategory 포함)
+    type ItemAnalysisData = StagnantItem & { 
+      mappedCategory: string;
+      subcategory: string;
+    };
+    const items: ItemAnalysisData[] = [];
     itemMap.forEach((data, itemCode) => {
       const stockTagK = data.stockTag / 1000;
       const monthGrossK = data.monthGross / 1000;
@@ -909,6 +913,7 @@ export function OffSeasonInventoryDashboard({
       items.push({
         itemCode,
         mappedCategory: data.mappedCategory,
+        subcategory: data.subcategory,
         subcategoryName: data.subcategoryName,
         itemDesc2: data.itemDesc2,
         seasonCode: data.seasonCode,
@@ -923,15 +928,15 @@ export function OffSeasonInventoryDashboard({
     });
 
     // 연차별로 그룹화하고 재고택가 기준 정렬
-    type WearEtcByBucket = Record<YearBucket, WearEtcItem[]>;
-    const result: WearEtcByBucket = {
+    type ItemAnalysisByBucket = Record<YearBucket, ItemAnalysisData[]>;
+    const result: ItemAnalysisByBucket = {
       Y1: items.filter(i => i.yearBucket === 'Y1').sort((a, b) => b.stockTagK - a.stockTagK),
       Y2: items.filter(i => i.yearBucket === 'Y2').sort((a, b) => b.stockTagK - a.stockTagK),
       Y3Plus: items.filter(i => i.yearBucket === 'Y3Plus').sort((a, b) => b.stockTagK - a.stockTagK),
       InSeason: [],
     };
 
-    console.log('의류기타 품번별 분석:', result);
+    console.log('품번별 분석:', result);
     return result;
   }, [filteredData]);
 
@@ -1342,22 +1347,22 @@ export function OffSeasonInventoryDashboard({
               </div>
             </section>
 
-        {/* 의류기타 카테고리 품번별 분석 섹션 */}
+        {/* 품번별 상세 분석 섹션 */}
         <section className="mb-8">
           <div className="bg-white rounded-lg shadow-md p-6 border-2 border-indigo-200">
             <div className="flex items-center gap-3 mb-4">
               <span className="text-2xl">🔍</span>
-              <h2 className="text-xl font-bold text-indigo-900">의류기타 카테고리 품번별 상세 분석</h2>
+              <h2 className="text-xl font-bold text-indigo-900">품번별 상세 분석</h2>
             </div>
             <p className="text-xs text-gray-500 mb-6">재고택가 기준 상위 품번 분석</p>
             
             {(['Y1', 'Y2', 'Y3Plus'] as const).map((bucket) => {
               const bucketLabel = bucket === 'Y1' ? '1년차 (24F)' : bucket === 'Y2' ? '2년차 (23F)' : '3년차~ (22F~)';
-              const items = wearEtcAnalysis[bucket];
+              const items = itemAnalysis[bucket];
               
               if (items.length === 0) return null;
               
-              const WearEtcBucketTable = () => {
+              const ItemBucketTable = () => {
                 const [showAll, setShowAll] = useState(false);
                 const [selectedCategory, setSelectedCategory] = useState<string>('전체');
                 
@@ -1403,8 +1408,8 @@ export function OffSeasonInventoryDashboard({
                           <col style={{width: '4%'}} />
                           <col style={{width: '8%'}} />
                           <col style={{width: '10%'}} />
-                          <col style={{width: '10%'}} />
-                          <col style={{width: '16%'}} />
+                          <col style={{width: '8%'}} />
+                          <col style={{width: '18%'}} />
                           <col style={{width: '6%'}} />
                           <col style={{width: '9%'}} />
                           <col style={{width: '9%'}} />
@@ -1442,7 +1447,7 @@ export function OffSeasonInventoryDashboard({
                                 </span>
                               </td>
                               <td className="px-2 py-2 text-left text-gray-900 font-medium break-all">{item.itemCode}</td>
-                              <td className="px-2 py-2 text-left text-gray-700 break-all">{item.subcategoryName}</td>
+                              <td className="px-2 py-2 text-left text-gray-700 break-all">{item.subcategory}</td>
                               <td className="px-2 py-2 text-left text-gray-700 break-all">{item.itemDesc2 || '-'}</td>
                               <td className="px-2 py-2 text-center text-gray-700">{item.seasonCode}</td>
                               <td className="px-2 py-2 text-right text-blue-700 font-semibold whitespace-nowrap">
@@ -1489,7 +1494,7 @@ export function OffSeasonInventoryDashboard({
                     </h3>
                   </div>
                   
-                  <WearEtcBucketTable />
+                  <ItemBucketTable />
                 </div>
               );
             })}
