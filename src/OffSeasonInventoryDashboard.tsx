@@ -1373,7 +1373,7 @@ export function OffSeasonInventoryDashboard({
               
               analysisText += '\n\n';
               
-              // 정체재고 수량 분석
+              // 정체재고 수량 및 택금액 분석
               const totalStagnantQty = stagnantByBucket.Y1.reduce((sum, item) => sum + item.stockQty, 0) +
                                        stagnantByBucket.Y2.reduce((sum, item) => sum + item.stockQty, 0) +
                                        stagnantByBucket.Y3Plus.reduce((sum, item) => sum + item.stockQty, 0);
@@ -1381,11 +1381,20 @@ export function OffSeasonInventoryDashboard({
               const y2StagnantQty = stagnantByBucket.Y2.reduce((sum, item) => sum + item.stockQty, 0);
               const y3StagnantQty = stagnantByBucket.Y3Plus.reduce((sum, item) => sum + item.stockQty, 0);
               
+              // 정체재고 택금액 계산 (K 단위)
+              const totalStagnantStockTagK = stagnantByBucket.Y1.reduce((sum, item) => sum + item.stockTagK, 0) +
+                                           stagnantByBucket.Y2.reduce((sum, item) => sum + item.stockTagK, 0) +
+                                           stagnantByBucket.Y3Plus.reduce((sum, item) => sum + item.stockTagK, 0);
+              const y1StagnantStockTagK = stagnantByBucket.Y1.reduce((sum, item) => sum + item.stockTagK, 0);
+              const y2StagnantStockTagK = stagnantByBucket.Y2.reduce((sum, item) => sum + item.stockTagK, 0);
+              const y3StagnantStockTagK = stagnantByBucket.Y3Plus.reduce((sum, item) => sum + item.stockTagK, 0);
+              
               analysisText += '📦 정체재고 수량: ';
-              analysisText += `총 ${totalStagnantQty.toLocaleString('ko-KR')}개(QTY)의 정체재고가 있으며, `;
-              analysisText += `1년차 ${y1StagnantQty.toLocaleString('ko-KR')}개, `;
-              analysisText += `2년차 ${y2StagnantQty.toLocaleString('ko-KR')}개, `;
-              analysisText += `3년차 이상 ${y3StagnantQty.toLocaleString('ko-KR')}개로 구성되어 있습니다. `;
+              analysisText += `총 ${totalStagnantQty.toLocaleString('ko-KR')}개(QTY), 택금액 ${formatNumberK(totalStagnantStockTagK * 1000)}의 정체재고가 있으며, `;
+              analysisText += `1년차 ${y1StagnantQty.toLocaleString('ko-KR')}개(${formatNumberK(y1StagnantStockTagK * 1000)}), `;
+              analysisText += `2년차 ${y2StagnantQty.toLocaleString('ko-KR')}개(${formatNumberK(y2StagnantStockTagK * 1000)}), `;
+              analysisText += `3년차 이상 ${y3StagnantQty.toLocaleString('ko-KR')}개(${formatNumberK(y3StagnantStockTagK * 1000)})로 구성되어 있습니다. `;
+              analysisText += `(정체재고 기준: 당월 택가매출이 재고택가의 0.1% 미만인 품번) `;
               if (y3StagnantQty > y1StagnantQty && y3StagnantQty > y2StagnantQty) {
                 analysisText += '3년차 이상 재고가 가장 많아 즉각적인 처분이 필요합니다.';
               } else if (y2StagnantQty > y1StagnantQty) {
