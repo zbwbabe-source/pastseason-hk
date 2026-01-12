@@ -1181,6 +1181,125 @@ export function OffSeasonInventoryDashboard({
               </button>
             </div>
             
+            {/* AI 분석 섹션 */}
+            {(() => {
+              // 연차별 분석
+              const y1Data = categoryAnalysis.Y1;
+              const y2Data = categoryAnalysis.Y2;
+              const y3Data = categoryAnalysis.Y3Plus;
+              
+              // 1년차 분석
+              const y1Total = y1Data['합계'];
+              const y1AchievementRate = y1Total ? (y1Total.tagSalesActual / Math.max(y1Total.tagSalesTarget, 1)) * 100 : 0;
+              
+              // 2년차 분석
+              const y2Total = y2Data['합계'];
+              const y2AchievementRate = y2Total ? (y2Total.tagSalesActual / Math.max(y2Total.tagSalesTarget, 1)) * 100 : 0;
+              const y2DiscountActual = y2Total.tagSalesActual > 0 ? (1 - y2Total.netSalesActual / y2Total.tagSalesActual) * 100 : 0;
+              const y2DiscountDiff = y2DiscountActual - y2Total.discountRateTarget * 100;
+              
+              // 3년차 분석
+              const y3Total = y3Data['합계'];
+              const y3AchievementRate = y3Total ? (y3Total.tagSalesActual / Math.max(y3Total.tagSalesTarget, 1)) * 100 : 0;
+              const y3DiscountActual = y3Total.tagSalesActual > 0 ? (1 - y3Total.netSalesActual / y3Total.tagSalesActual) * 100 : 0;
+              const y3DiscountDiff = y3DiscountActual - y3Total.discountRateTarget * 100;
+              
+              // 카테고리별 분석 (전체 연차 합산)
+              const categoryPerformance: Record<string, { sales: number; achievement: number; discountDiff: number; stockVariance: number }> = {};
+              
+              ['INNER', 'OUTER', 'BOTTOM', '의류기타'].forEach(cat => {
+                const y1Cat = y1Data[cat];
+                const y2Cat = y2Data[cat];
+                const y3Cat = y3Data[cat];
+                
+                const totalSales = (y1Cat?.tagSalesActual || 0) + (y2Cat?.tagSalesActual || 0) + (y3Cat?.tagSalesActual || 0);
+                const totalTarget = (y1Cat?.tagSalesTarget || 0) + (y2Cat?.tagSalesTarget || 0) + (y3Cat?.tagSalesTarget || 0);
+                const avgAchievement = totalTarget > 0 ? (totalSales / totalTarget) * 100 : 0;
+                
+                const y1DiscountActualCat = y1Cat && y1Cat.tagSalesActual > 0 ? (1 - y1Cat.netSalesActual / y1Cat.tagSalesActual) * 100 : 0;
+                const y2DiscountActualCat = y2Cat && y2Cat.tagSalesActual > 0 ? (1 - y2Cat.netSalesActual / y2Cat.tagSalesActual) * 100 : 0;
+                const y3DiscountActualCat = y3Cat && y3Cat.tagSalesActual > 0 ? (1 - y3Cat.netSalesActual / y3Cat.tagSalesActual) * 100 : 0;
+                
+                const avgDiscountDiff = [
+                  y1DiscountActualCat - (y1Cat?.discountRateTarget || 0) * 100,
+                  y2DiscountActualCat - (y2Cat?.discountRateTarget || 0) * 100,
+                  y3DiscountActualCat - (y3Cat?.discountRateTarget || 0) * 100,
+                ].reduce((sum, val) => sum + val, 0) / 3;
+                
+                const totalStockVariance = 
+                  ((y1Cat?.stock2512Actual || 0) - (y1Cat?.stock2512Target || 0)) +
+                  ((y2Cat?.stock2512Actual || 0) - (y2Cat?.stock2512Target || 0)) +
+                  ((y3Cat?.stock2512Actual || 0) - (y3Cat?.stock2512Target || 0));
+                
+                categoryPerformance[cat] = {
+                  sales: totalSales,
+                  achievement: avgAchievement,
+                  discountDiff: avgDiscountDiff,
+                  stockVariance: totalStockVariance,
+                };
+              });
+              
+              // 카테고리 성과 순위
+              const sortedCategories = Object.entries(categoryPerformance)
+                .sort((a, b) => b[1].achievement - a[1].achievement);
+              
+              const bestCategory = sortedCategories[0];
+              const worstCategory = sortedCategories[sortedCategories.length - 1];
+              
+              // 분석 텍스트 생성
+              let analysisText = '';
+              
+              // 연차별 분석
+              analysisText += '📌 연차별 실적: ';
+              if (y1AchievementRate >= 90) {
+                analysisText += `1년차는 판매목표 대비 ${y1AchievementRate.toFixed(1)}% 달성으로 양호한 실적을 보였습니다. `;
+              } else {
+                analysisText += `1년차는 판매목표 대비 ${y1AchievementRate.toFixed(1)}% 달성으로 미흡한 실적입니다. `;
+              }
+              
+              analysisText += `2년차와 3년차는 각각 ${y2AchievementRate.toFixed(1)}%, ${y3AchievementRate.toFixed(1)}% 달성으로 목표 미달입니다. `;
+              
+              analysisText += '\n\n';
+              
+              // 할인율 분석
+              analysisText += '💡 할인율 전략: ';
+              if (y2DiscountDiff < 0 || y3DiscountDiff < 0) {
+                analysisText += `2년차(${y2DiscountDiff > 0 ? '+' : ''}${y2DiscountDiff.toFixed(1)}%p)와 3년차(${y3DiscountDiff > 0 ? '+' : ''}${y3DiscountDiff.toFixed(1)}%p)는 `;
+                analysisText += '목표 대비 할인율이 낮아 판매 부진의 주요 원인으로 보입니다. 공격적인 할인 프로모션이 필요합니다. ';
+              } else {
+                analysisText += `2년차와 3년차의 할인율이 목표보다 높게 운영되었으나, 판매 실적이 부진합니다. `;
+              }
+              
+              analysisText += '\n\n';
+              
+              // 카테고리별 분석
+              analysisText += '🎯 카테고리별 분석: ';
+              analysisText += `${bestCategory[0]}가 ${bestCategory[1].achievement.toFixed(1)}% 달성으로 가장 우수하며, `;
+              analysisText += `${worstCategory[0]}는 ${worstCategory[1].achievement.toFixed(1)}% 달성으로 개선이 필요합니다. `;
+              
+              // 재고 증감 분석
+              const stockIncreaseCategories = sortedCategories.filter(([_, data]) => data.stockVariance > 500);
+              if (stockIncreaseCategories.length > 0) {
+                analysisText += `${stockIncreaseCategories.map(([cat]) => cat).join(', ')} 카테고리는 목표 대비 재고가 증가하여 추가 소진 전략이 시급합니다.`;
+              } else {
+                analysisText += '대부분 카테고리에서 재고 감축 목표를 달성했습니다.';
+              }
+              
+              return (
+                <div className="mb-6 bg-gradient-to-r from-purple-50 to-indigo-50 border-l-4 border-purple-500 p-4 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl">🤖</span>
+                    <div className="flex-1">
+                      <div className="text-sm font-bold text-purple-900 mb-2">AI 분석 요약</div>
+                      <div className="text-sm text-gray-800 whitespace-pre-line leading-relaxed">
+                        {analysisText}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+            
             {/* 연차별 테이블 */}
             {(['Y1', 'Y2', 'Y3Plus'] as const).map((bucket, index) => {
               const bucketLabel = bucket === 'Y1' ? '1년차 (24F)' : bucket === 'Y2' ? '2년차 (23F)' : '3년차~ (22F~)';
