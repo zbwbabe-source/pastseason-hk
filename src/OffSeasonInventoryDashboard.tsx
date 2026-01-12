@@ -1800,12 +1800,99 @@ type StagnantByVintageSectionProps = {
 const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ itemsByBucket, periodLabel, totalStockByBucket }) => {
   const [open, setOpen] = useState(true);
   const [showItems, setShowItems] = useState(false);
+  
+  // 각 연차별 정렬 상태 관리
+  const [sortConfig, setSortConfig] = useState<Record<YearBucket, { column: string | null; direction: 'asc' | 'desc' }>>({
+    Y1: { column: 'stockTagK', direction: 'desc' }, // 기본값: 택가재고 내림차순
+    Y2: { column: 'stockTagK', direction: 'desc' },
+    Y3Plus: { column: 'stockTagK', direction: 'desc' },
+    InSeason: { column: null, direction: 'asc' },
+  });
 
   const yearBucketLabel: Record<YearBucket, string> = {
     InSeason: '당시즌',
     Y1: '24F (1년차)',
     Y2: '23F (2년차)',
     Y3Plus: '22F~ (3년차~)',
+  };
+
+  // 정렬 함수
+  const handleSort = (bucket: YearBucket, column: string) => {
+    setSortConfig(prev => {
+      const current = prev[bucket];
+      if (current.column === column) {
+        // 같은 컬럼 클릭 시 정렬 방향 전환
+        return {
+          ...prev,
+          [bucket]: { column, direction: current.direction === 'asc' ? 'desc' : 'asc' },
+        };
+      } else {
+        // 다른 컬럼 클릭 시 내림차순으로 시작
+        return {
+          ...prev,
+          [bucket]: { column, direction: 'desc' },
+        };
+      }
+    });
+  };
+
+  // 정렬된 아이템 반환
+  const getSortedItems = (bucket: YearBucket, items: Array<{
+    itemCode: string;
+    subcategory: string;
+    subcategoryName: string;
+    itemDesc2: string | null;
+    seasonCode: string;
+    yearBucket: YearBucket;
+    stockTagK: number;
+    monthGrossK: number;
+    monthNetK: number;
+    discountRate: number | null;
+    inventoryDays: number | null;
+    ratio: number;
+  }>) => {
+    const config = sortConfig[bucket];
+    if (!config.column) return items;
+
+    const sorted = [...items].sort((a, b) => {
+      let aValue: number | null;
+      let bValue: number | null;
+
+      switch (config.column) {
+        case 'stockTagK':
+          aValue = a.stockTagK;
+          bValue = b.stockTagK;
+          break;
+        case 'monthGrossK':
+          aValue = a.monthGrossK;
+          bValue = b.monthGrossK;
+          break;
+        case 'monthNetK':
+          aValue = a.monthNetK;
+          bValue = b.monthNetK;
+          break;
+        case 'discountRate':
+          aValue = a.discountRate;
+          bValue = b.discountRate;
+          break;
+        case 'inventoryDays':
+          aValue = a.inventoryDays;
+          bValue = b.inventoryDays;
+          break;
+        default:
+          return 0;
+      }
+
+      // null 처리: null은 항상 뒤로
+      if (aValue === null && bValue === null) return 0;
+      if (aValue === null) return 1;
+      if (bValue === null) return -1;
+
+      const diff = aValue - bValue;
+      return config.direction === 'asc' ? diff : -diff;
+    });
+
+    return sorted;
   };
 
   const totalStagnantCount = itemsByBucket.Y1.length + itemsByBucket.Y2.length + itemsByBucket.Y3Plus.length;
@@ -1987,6 +2074,19 @@ const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ ite
               const items = itemsByBucket[bucket];
               if (items.length === 0) return null;
 
+              const sortedItems = getSortedItems(bucket, items);
+              const currentSort = sortConfig[bucket];
+
+              // 정렬 아이콘 렌더링 함수
+              const renderSortIcon = (column: string) => {
+                if (currentSort.column !== column) {
+                  return <span className="text-gray-300 ml-1">↕</span>;
+                }
+                return currentSort.direction === 'asc' 
+                  ? <span className="text-blue-600 ml-1">↑</span>
+                  : <span className="text-blue-600 ml-1">↓</span>;
+              };
+
               return (
                 <div key={bucket} className="mb-6 last:mb-0">
                   {/* 섹션 헤더 */}
@@ -2027,15 +2127,55 @@ const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ ite
                           <th className="px-2 py-1 text-left">SUBCATEGORY</th>
                           <th className="px-2 py-1 text-left">ITEM DESC2</th>
                           <th className="px-2 py-1 text-center w-16">시즌</th>
-                          <th className="px-2 py-1 text-right">택가 재고</th>
-                          <th className="px-2 py-1 text-right">{periodLabel} 택가매출</th>
-                          <th className="px-2 py-1 text-right">{periodLabel} 실판매출</th>
-                          <th className="px-2 py-1 text-right">할인율 (%)</th>
-                          <th className="px-2 py-1 text-right">재고일수 (일)</th>
+                          <th 
+                            className="px-2 py-1 text-right cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => handleSort(bucket, 'stockTagK')}
+                          >
+                            <div className="flex items-center justify-end">
+                              택가 재고
+                              {renderSortIcon('stockTagK')}
+                            </div>
+                          </th>
+                          <th 
+                            className="px-2 py-1 text-right cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => handleSort(bucket, 'monthGrossK')}
+                          >
+                            <div className="flex items-center justify-end">
+                              {periodLabel} 택가매출
+                              {renderSortIcon('monthGrossK')}
+                            </div>
+                          </th>
+                          <th 
+                            className="px-2 py-1 text-right cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => handleSort(bucket, 'monthNetK')}
+                          >
+                            <div className="flex items-center justify-end">
+                              {periodLabel} 실판매출
+                              {renderSortIcon('monthNetK')}
+                            </div>
+                          </th>
+                          <th 
+                            className="px-2 py-1 text-right cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => handleSort(bucket, 'discountRate')}
+                          >
+                            <div className="flex items-center justify-end">
+                              할인율 (%)
+                              {renderSortIcon('discountRate')}
+                            </div>
+                          </th>
+                          <th 
+                            className="px-2 py-1 text-right cursor-pointer hover:bg-gray-100 select-none"
+                            onClick={() => handleSort(bucket, 'inventoryDays')}
+                          >
+                            <div className="flex items-center justify-end">
+                              재고일수 (일)
+                              {renderSortIcon('inventoryDays')}
+                            </div>
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
-                        {items.slice(0, 3).map((item, index) => (
+                        {sortedItems.slice(0, 3).map((item, index) => (
                           <tr key={item.itemCode} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                             <td className="px-2 py-1 text-right text-[11px] text-gray-500 w-10">
                               {index + 1}
@@ -2067,7 +2207,7 @@ const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ ite
                   {/* 더보기/접기 토글 버튼 */}
                   {items.length > 3 && (
                     <StagnantBucketToggle
-                      items={items}
+                      items={sortedItems}
                       periodLabel={periodLabel}
                     />
                   )}
