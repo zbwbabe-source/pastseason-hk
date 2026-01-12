@@ -1195,14 +1195,14 @@ export function OffSeasonInventoryDashboard({
               // 2년차 분석
               const y2Total = y2Data['합계'];
               const y2AchievementRate = y2Total ? (y2Total.tagSalesActual / Math.max(y2Total.tagSalesTarget, 1)) * 100 : 0;
-              const y2DiscountActual = y2Total.tagSalesActual > 0 ? (1 - y2Total.netSalesActual / y2Total.tagSalesActual) * 100 : 0;
-              const y2DiscountDiff = y2DiscountActual - y2Total.discountRateTarget * 100;
+              const y2DiscountActual = y2Total && y2Total.tagSalesActual > 0 ? (1 - y2Total.netSalesActual / y2Total.tagSalesActual) * 100 : 0;
+              const y2DiscountDiff = y2Total ? y2DiscountActual - y2Total.discountRateTarget * 100 : 0;
               
               // 3년차 분석
               const y3Total = y3Data['합계'];
               const y3AchievementRate = y3Total ? (y3Total.tagSalesActual / Math.max(y3Total.tagSalesTarget, 1)) * 100 : 0;
-              const y3DiscountActual = y3Total.tagSalesActual > 0 ? (1 - y3Total.netSalesActual / y3Total.tagSalesActual) * 100 : 0;
-              const y3DiscountDiff = y3DiscountActual - y3Total.discountRateTarget * 100;
+              const y3DiscountActual = y3Total && y3Total.tagSalesActual > 0 ? (1 - y3Total.netSalesActual / y3Total.tagSalesActual) * 100 : 0;
+              const y3DiscountDiff = y3Total ? y3DiscountActual - y3Total.discountRateTarget * 100 : 0;
               
               // 카테고리별 분석 (전체 연차 합산)
               const categoryPerformance: Record<string, { sales: number; achievement: number; discountDiff: number; stockVariance: number }> = {};
