@@ -23,6 +23,162 @@ type Props = {
 };
 
 /**
+ * 연차별 카테고리 테이블 섹션 (접었다 폈다 가능)
+ */
+type CategoryData = {
+  tagSalesActual: number;
+  netSalesActual: number;
+  tagSalesTarget: number;
+  discountRateTarget: number;
+  discountRateActual: number;
+  stock2511: number;
+  stock2512Actual: number;
+  stock2512Target: number;
+};
+
+type YearBucketSectionProps = {
+  bucketLabel: string;
+  categories: Record<string, CategoryData>;
+};
+
+const YearBucketSection: React.FC<YearBucketSectionProps> = ({ bucketLabel, categories }) => {
+  const [isOpen, setIsOpen] = useState(true);
+  
+  // 합계 계산
+  const totalTarget = Object.values(categories).reduce((sum, d) => sum + d.tagSalesTarget, 0);
+  const totalActual = Object.values(categories).reduce((sum, d) => sum + d.tagSalesActual, 0);
+  const totalStock2512Target = Object.values(categories).reduce((sum, d) => sum + d.stock2512Target, 0);
+  const totalStock2512Actual = Object.values(categories).reduce((sum, d) => sum + d.stock2512Actual, 0);
+  const totalAchievementRate = totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0;
+  
+  return (
+    <div className="mb-4 last:mb-0 border border-gray-200 rounded-lg">
+      {/* 헤더 (토글 버튼) */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-t-lg transition"
+      >
+        <div className="flex items-center gap-3">
+          <h3 className="text-lg font-semibold text-gray-800">{bucketLabel}</h3>
+          <span className="text-sm text-gray-500">
+            판매 달성률: 
+            <span className={`ml-1 font-semibold ${
+              totalAchievementRate >= 100 ? 'text-green-600'
+              : totalAchievementRate >= 80 ? 'text-yellow-600'
+              : 'text-red-600'
+            }`}>
+              {totalAchievementRate.toFixed(1)}%
+            </span>
+          </span>
+        </div>
+        <span className={`text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`}>
+          ▼
+        </span>
+      </button>
+      
+      {/* 테이블 내용 (토글) */}
+      {isOpen && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 whitespace-nowrap">카테고리</th>
+                <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">판매 목표</th>
+                <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">판매 실적</th>
+                <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">달성률 (%)</th>
+                <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">할인율 목표</th>
+                <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">할인율 실적</th>
+                <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">할인율 차이</th>
+                <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">목표 재고</th>
+                <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">실적 재고</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(categories).map(([category, data]) => {
+                const achievementRate = data.tagSalesTarget > 0 
+                  ? (data.tagSalesActual / data.tagSalesTarget) * 100 
+                  : 0;
+                const discountDiff = (data.discountRateActual - data.discountRateTarget) * 100;
+                
+                return (
+                  <tr key={category} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="px-4 py-2 text-left text-gray-900 font-medium whitespace-nowrap">{category}</td>
+                    <td className="px-4 py-2 text-right text-gray-700">
+                      {(data.tagSalesTarget / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
+                    </td>
+                    <td className="px-4 py-2 text-right text-gray-700">
+                      {(data.tagSalesActual / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
+                    </td>
+                    <td className={`px-4 py-2 text-right font-semibold ${
+                      achievementRate >= 100 ? 'bg-green-50 text-green-700'
+                      : achievementRate >= 80 ? 'bg-yellow-50 text-yellow-700'
+                      : 'bg-red-50 text-red-700'
+                    }`}>
+                      {achievementRate.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+                    </td>
+                    <td className="px-4 py-2 text-right text-gray-700">
+                      {(data.discountRateTarget * 100).toFixed(1)}%
+                    </td>
+                    <td className="px-4 py-2 text-right text-orange-600 font-medium">
+                      {(data.discountRateActual * 100).toFixed(1)}%
+                    </td>
+                    <td className={`px-4 py-2 text-right font-semibold ${
+                      discountDiff > 0 ? 'text-red-600' : 'text-green-600'
+                    }`}>
+                      {discountDiff > 0 ? '+' : ''}{discountDiff.toFixed(1)}%p
+                    </td>
+                    <td className="px-4 py-2 text-right text-blue-700 font-medium">
+                      {(data.stock2512Target / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
+                    </td>
+                    <td className="px-4 py-2 text-right text-blue-900 font-semibold">
+                      {(data.stock2512Actual / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
+                    </td>
+                  </tr>
+                );
+              })}
+              {/* 합계 행 */}
+              <tr className="bg-blue-50 border-t-2 border-blue-300 font-semibold">
+                <td className="px-4 py-2 text-left text-blue-900 whitespace-nowrap">합계</td>
+                <td className="px-4 py-2 text-right text-blue-900">
+                  {(totalTarget / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
+                </td>
+                <td className="px-4 py-2 text-right text-blue-900">
+                  {(totalActual / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
+                </td>
+                <td className={`px-4 py-2 text-right font-bold ${
+                  totalAchievementRate >= 100 ? 'bg-green-100 text-green-800' 
+                  : totalAchievementRate >= 80 ? 'bg-yellow-100 text-yellow-800' 
+                  : 'bg-red-100 text-red-800'
+                }`}>
+                  {totalAchievementRate.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+                </td>
+                <td className="px-4 py-2 text-right text-blue-900">-</td>
+                <td className="px-4 py-2 text-right text-blue-900 font-bold">
+                  {(() => {
+                    const totalGross = Object.values(categories).reduce((sum, d) => sum + d.tagSalesActual, 0);
+                    const totalNet = Object.values(categories).reduce((sum, d) => sum + d.netSalesActual, 0);
+                    const rate = totalGross > 0 ? (1 - totalNet / totalGross) * 100 : 0;
+                    return rate.toFixed(1) + '%';
+                  })()}
+                </td>
+                <td className="px-4 py-2 text-right text-blue-900">-</td>
+                <td className="px-4 py-2 text-right text-blue-900">
+                  {(totalStock2512Target / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
+                </td>
+                <td className="px-4 py-2 text-right text-blue-900 font-bold">
+                  {(totalStock2512Actual / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/**
  * 숫자 포맷팅 (K 단위)
  */
 function formatNumberK(value: number): string {
@@ -877,12 +1033,12 @@ export function OffSeasonInventoryDashboard({
           </div>
         </div>
 
-        {/* 카테고리별 목표 대비 분석 섹션 */}
+        {/* 과시즌재고현황 섹션 */}
         <section className="mb-8">
           <div className="bg-white rounded-lg shadow-md p-6 border-2 border-purple-200">
             <div className="flex items-center gap-3 mb-6">
               <span className="text-2xl">📊</span>
-              <h2 className="text-xl font-bold text-purple-900">카테고리별 목표 대비 분석</h2>
+              <h2 className="text-xl font-bold text-purple-900">과시즌재고현황</h2>
             </div>
             
             {/* 연차별 테이블 */}
@@ -891,121 +1047,11 @@ export function OffSeasonInventoryDashboard({
               const categories = categoryAnalysis[bucket];
               
               return (
-                <div key={bucket} className="mb-6 last:mb-0">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3">{bucketLabel}</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm border-collapse">
-                      <thead>
-                        <tr className="bg-gray-50 border-b border-gray-200">
-                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 whitespace-nowrap">카테고리</th>
-                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">판매 목표</th>
-                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">판매 실적</th>
-                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">달성률 (%)</th>
-                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">할인율 목표</th>
-                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">할인율 실적</th>
-                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">할인율 차이</th>
-                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">목표 재고</th>
-                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">실적 재고</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Object.entries(categories).map(([category, data]) => {
-                          const achievementRate = data.tagSalesTarget > 0 
-                            ? (data.tagSalesActual / data.tagSalesTarget) * 100 
-                            : 0;
-                          const discountDiff = (data.discountRateActual - data.discountRateTarget) * 100;
-                          
-                          return (
-                            <tr key={category} className="border-b border-gray-100 hover:bg-gray-50">
-                              <td className="px-4 py-2 text-left text-gray-900 font-medium whitespace-nowrap">{category}</td>
-                              <td className="px-4 py-2 text-right text-gray-700">
-                                {(data.tagSalesTarget / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
-                              </td>
-                              <td className="px-4 py-2 text-right text-gray-700">
-                                {(data.tagSalesActual / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
-                              </td>
-                              <td className={`px-4 py-2 text-right font-semibold ${
-                                achievementRate >= 100 ? 'bg-green-50 text-green-700'
-                                : achievementRate >= 80 ? 'bg-yellow-50 text-yellow-700'
-                                : 'bg-red-50 text-red-700'
-                              }`}>
-                                {achievementRate.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
-                              </td>
-                              <td className="px-4 py-2 text-right text-gray-700">
-                                {(data.discountRateTarget * 100).toFixed(1)}%
-                              </td>
-                              <td className="px-4 py-2 text-right text-orange-600 font-medium">
-                                {(data.discountRateActual * 100).toFixed(1)}%
-                              </td>
-                              <td className={`px-4 py-2 text-right font-semibold ${
-                                discountDiff > 0 ? 'text-red-600' : 'text-green-600'
-                              }`}>
-                                {discountDiff > 0 ? '+' : ''}{discountDiff.toFixed(1)}%p
-                              </td>
-                              <td className="px-4 py-2 text-right text-blue-700 font-medium">
-                                {(data.stock2512Target / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
-                              </td>
-                              <td className="px-4 py-2 text-right text-blue-900 font-semibold">
-                                {(data.stock2512Actual / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        {/* 합계 행 */}
-                        <tr className="bg-blue-50 border-t-2 border-blue-300 font-semibold">
-                          <td className="px-4 py-2 text-left text-blue-900 whitespace-nowrap">합계</td>
-                          <td className="px-4 py-2 text-right text-blue-900">
-                            {(() => {
-                              const total = Object.values(categories).reduce((sum, d) => sum + d.tagSalesTarget, 0);
-                              return (total / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 }) + 'K';
-                            })()}
-                          </td>
-                          <td className="px-4 py-2 text-right text-blue-900">
-                            {(() => {
-                              const total = Object.values(categories).reduce((sum, d) => sum + d.tagSalesActual, 0);
-                              return (total / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 }) + 'K';
-                            })()}
-                          </td>
-                          <td className={`px-4 py-2 text-right font-bold ${(() => {
-                            const totalTarget = Object.values(categories).reduce((sum, d) => sum + d.tagSalesTarget, 0);
-                            const totalActual = Object.values(categories).reduce((sum, d) => sum + d.tagSalesActual, 0);
-                            const rate = totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0;
-                            return rate >= 100 ? 'bg-green-100 text-green-800' : rate >= 80 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800';
-                          })()}`}>
-                            {(() => {
-                              const totalTarget = Object.values(categories).reduce((sum, d) => sum + d.tagSalesTarget, 0);
-                              const totalActual = Object.values(categories).reduce((sum, d) => sum + d.tagSalesActual, 0);
-                              const rate = totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0;
-                              return rate.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
-                            })()}
-                          </td>
-                          <td className="px-4 py-2 text-right text-blue-900">-</td>
-                          <td className="px-4 py-2 text-right text-blue-900 font-bold">
-                            {(() => {
-                              const totalGross = Object.values(categories).reduce((sum, d) => sum + d.tagSalesActual, 0);
-                              const totalNet = Object.values(categories).reduce((sum, d) => sum + d.netSalesActual, 0);
-                              const rate = totalGross > 0 ? (1 - totalNet / totalGross) * 100 : 0;
-                              return rate.toFixed(1) + '%';
-                            })()}
-                          </td>
-                          <td className="px-4 py-2 text-right text-blue-900">-</td>
-                          <td className="px-4 py-2 text-right text-blue-900">
-                            {(() => {
-                              const total = Object.values(categories).reduce((sum, d) => sum + d.stock2512Target, 0);
-                              return (total / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 }) + 'K';
-                            })()}
-                          </td>
-                          <td className="px-4 py-2 text-right text-blue-900 font-bold">
-                            {(() => {
-                              const total = Object.values(categories).reduce((sum, d) => sum + d.stock2512Actual, 0);
-                              return (total / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 }) + 'K';
-                            })()}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                <YearBucketSection 
+                  key={bucket} 
+                  bucketLabel={bucketLabel} 
+                  categories={categories} 
+                />
               );
             })}
           </div>
