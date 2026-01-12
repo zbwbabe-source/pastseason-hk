@@ -861,6 +861,7 @@ export function OffSeasonInventoryDashboard({
     // 품번별로 집계
     const itemMap = new Map<string, {
       itemCode: string;
+      mappedCategory: string; // 상위 카테고리 추가
       subcategoryName: string;
       itemDesc2: string | null;
       seasonCode: string;
@@ -881,6 +882,7 @@ export function OffSeasonInventoryDashboard({
       } else {
         itemMap.set(row.itemCode, {
           itemCode: row.itemCode,
+          mappedCategory: row.mappedCategory,
           subcategoryName: row.subcategoryName,
           itemDesc2: row.itemDesc2,
           seasonCode: row.seasonInfo.seasonCode,
@@ -893,8 +895,9 @@ export function OffSeasonInventoryDashboard({
       }
     });
 
-    // StagnantItem 형식으로 변환
-    const items: StagnantItem[] = [];
+    // StagnantItem 형식으로 변환 (mappedCategory 포함)
+    type WearEtcItem = StagnantItem & { mappedCategory: string };
+    const items: WearEtcItem[] = [];
     itemMap.forEach((data, itemCode) => {
       const stockTagK = data.stockTag / 1000;
       const monthGrossK = data.monthGross / 1000;
@@ -905,6 +908,7 @@ export function OffSeasonInventoryDashboard({
 
       items.push({
         itemCode,
+        mappedCategory: data.mappedCategory,
         subcategoryName: data.subcategoryName,
         itemDesc2: data.itemDesc2,
         seasonCode: data.seasonCode,
@@ -919,7 +923,8 @@ export function OffSeasonInventoryDashboard({
     });
 
     // 연차별로 그룹화하고 재고택가 기준 정렬
-    const result: StagnantByBucket = {
+    type WearEtcByBucket = Record<YearBucket, WearEtcItem[]>;
+    const result: WearEtcByBucket = {
       Y1: items.filter(i => i.yearBucket === 'Y1').sort((a, b) => b.stockTagK - a.stockTagK),
       Y2: items.filter(i => i.yearBucket === 'Y2').sort((a, b) => b.stockTagK - a.stockTagK),
       Y3Plus: items.filter(i => i.yearBucket === 'Y3Plus').sort((a, b) => b.stockTagK - a.stockTagK),
@@ -1354,29 +1359,65 @@ export function OffSeasonInventoryDashboard({
               
               const WearEtcBucketTable = () => {
                 const [showAll, setShowAll] = useState(false);
-                const displayItems = showAll ? items : items.slice(0, 10);
+                const [selectedCategory, setSelectedCategory] = useState<string>('전체');
+                
+                // 카테고리 필터링
+                const filteredItems = selectedCategory === '전체' 
+                  ? items 
+                  : items.filter(item => item.mappedCategory === selectedCategory);
+                
+                const displayItems = showAll ? filteredItems : filteredItems.slice(0, 10);
+                
+                // 카테고리별 개수 집계
+                const categoryCounts = {
+                  '전체': items.length,
+                  'INNER': items.filter(i => i.mappedCategory === 'INNER').length,
+                  'OUTER': items.filter(i => i.mappedCategory === 'OUTER').length,
+                  'BOTTOM': items.filter(i => i.mappedCategory === 'BOTTOM').length,
+                  '의류기타': items.filter(i => i.mappedCategory === '의류기타').length,
+                };
                 
                 return (
                   <>
+                    {/* 카테고리 필터 버튼 */}
+                    <div className="mb-4 flex gap-2 flex-wrap">
+                      {Object.entries(categoryCounts).map(([cat, count]) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setSelectedCategory(cat)}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${
+                            selectedCategory === cat
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {cat} ({count})
+                        </button>
+                      ))}
+                    </div>
+                    
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs border-collapse table-fixed">
                         <colgroup>
                           <col style={{width: '4%'}} />
+                          <col style={{width: '8%'}} />
                           <col style={{width: '10%'}} />
-                          <col style={{width: '12%'}} />
-                          <col style={{width: '18%'}} />
+                          <col style={{width: '10%'}} />
+                          <col style={{width: '16%'}} />
                           <col style={{width: '6%'}} />
-                          <col style={{width: '10%'}} />
-                          <col style={{width: '10%'}} />
-                          <col style={{width: '10%'}} />
-                          <col style={{width: '10%'}} />
+                          <col style={{width: '9%'}} />
+                          <col style={{width: '9%'}} />
+                          <col style={{width: '9%'}} />
+                          <col style={{width: '9%'}} />
                           <col style={{width: '10%'}} />
                         </colgroup>
                         <thead>
                           <tr className="border-b bg-gray-50">
                             <th className="px-2 py-2 text-center text-gray-700 font-semibold">순위</th>
+                            <th className="px-2 py-2 text-left text-gray-700 font-semibold">카테고리</th>
                             <th className="px-2 py-2 text-left text-gray-700 font-semibold">Item Code</th>
-                            <th className="px-2 py-2 text-left text-gray-700 font-semibold">SUBCATEGORY NAME</th>
+                            <th className="px-2 py-2 text-left text-gray-700 font-semibold">SUBCATEGORY</th>
                             <th className="px-2 py-2 text-left text-gray-700 font-semibold">ITEM DESC2</th>
                             <th className="px-2 py-2 text-center text-gray-700 font-semibold">시즌</th>
                             <th className="px-2 py-2 text-right text-gray-700 font-semibold">택가 재고</th>
@@ -1390,6 +1431,16 @@ export function OffSeasonInventoryDashboard({
                           {displayItems.map((item, index) => (
                             <tr key={item.itemCode} className="border-b hover:bg-gray-50">
                               <td className="px-2 py-2 text-center text-gray-600">{index + 1}</td>
+                              <td className="px-2 py-2 text-left">
+                                <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                                  item.mappedCategory === 'INNER' ? 'bg-blue-100 text-blue-700' :
+                                  item.mappedCategory === 'OUTER' ? 'bg-green-100 text-green-700' :
+                                  item.mappedCategory === 'BOTTOM' ? 'bg-purple-100 text-purple-700' :
+                                  'bg-gray-100 text-gray-700'
+                                }`}>
+                                  {item.mappedCategory}
+                                </span>
+                              </td>
                               <td className="px-2 py-2 text-left text-gray-900 font-medium break-all">{item.itemCode}</td>
                               <td className="px-2 py-2 text-left text-gray-700 break-all">{item.subcategoryName}</td>
                               <td className="px-2 py-2 text-left text-gray-700 break-all">{item.itemDesc2 || '-'}</td>
@@ -1415,14 +1466,14 @@ export function OffSeasonInventoryDashboard({
                       </table>
                     </div>
                     
-                    {items.length > 10 && (
+                    {filteredItems.length > 10 && (
                       <div className="mt-3 text-center">
                         <button
                           type="button"
                           onClick={() => setShowAll(!showAll)}
                           className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
                         >
-                          {showAll ? '접기 ▲' : `더보기 (${items.length - 10}개 더) ▼`}
+                          {showAll ? '접기 ▲' : `더보기 (${filteredItems.length - 10}개 더) ▼`}
                         </button>
                       </div>
                     )}
