@@ -856,8 +856,16 @@ export function OffSeasonInventoryDashboard({
              isOffSeasonFW(row) && 
              (row.country === 'HK' || row.country === 'MC')
     );
+    
+    // PY 12월 데이터 (2412 period) - YOY 계산용
+    const pyFiltered = filteredData.filter(
+      row => row.sourceYearType === 'PY' && 
+             isOffSeasonFW(row) && 
+             (row.country === 'HK' || row.country === 'MC') &&
+             row.period === '2412'
+    );
 
-    // 품번별로 집계
+    // 품번별로 집계 (CY)
     const itemMap = new Map<string, {
       itemCode: string;
       mappedCategory: string; // INNER/OUTER/BOTTOM/의류기타
@@ -895,17 +903,26 @@ export function OffSeasonInventoryDashboard({
         });
       }
     });
+    
+    // PY 12월 품번별 택가매출 집계 (YOY 계산용)
+    const pyItemMap = new Map<string, number>();
+    pyFiltered.forEach(row => {
+      const existing = pyItemMap.get(row.itemCode) || 0;
+      pyItemMap.set(row.itemCode, existing + row.grossSalesFx);
+    });
 
     // Item 형식으로 변환 (mappedCategory와 subcategory 포함)
     type ItemAnalysisData = StagnantItem & { 
       mappedCategory: string;
       subcategory: string;
+      pyMonthGross: number; // PY 12월 택가매출
     };
     const items: ItemAnalysisData[] = [];
     itemMap.forEach((data, itemCode) => {
       const stockTagK = data.stockTag / 1000;
       const monthGrossK = data.monthGross / 1000;
       const monthNetK = data.monthNet / 1000;
+      const pyMonthGrossK = (pyItemMap.get(itemCode) || 0) / 1000;
       const ratio = data.stockTag > 0 ? data.monthGross / data.stockTag : 0;
       const discountRate = data.monthGross > 0 ? 1 - (data.monthNet / data.monthGross) : null;
       const inventoryDays = data.cogs > 0 ? (data.stockTag / data.cogs) * 30 : null;
@@ -924,6 +941,7 @@ export function OffSeasonInventoryDashboard({
         discountRate,
         inventoryDays,
         ratio,
+        pyMonthGross: pyMonthGrossK,
       });
     });
 
@@ -1405,17 +1423,18 @@ export function OffSeasonInventoryDashboard({
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs border-collapse table-fixed">
                         <colgroup>
-                          <col style={{width: '4%'}} />
+                          <col style={{width: '3%'}} />
+                          <col style={{width: '7%'}} />
+                          <col style={{width: '9%'}} />
+                          <col style={{width: '7%'}} />
+                          <col style={{width: '15%'}} />
+                          <col style={{width: '5%'}} />
                           <col style={{width: '8%'}} />
-                          <col style={{width: '10%'}} />
                           <col style={{width: '8%'}} />
-                          <col style={{width: '18%'}} />
-                          <col style={{width: '6%'}} />
+                          <col style={{width: '7%'}} />
+                          <col style={{width: '8%'}} />
+                          <col style={{width: '8%'}} />
                           <col style={{width: '9%'}} />
-                          <col style={{width: '9%'}} />
-                          <col style={{width: '9%'}} />
-                          <col style={{width: '9%'}} />
-                          <col style={{width: '10%'}} />
                         </colgroup>
                         <thead>
                           <tr className="border-b bg-gray-50">
@@ -1427,6 +1446,7 @@ export function OffSeasonInventoryDashboard({
                             <th className="px-2 py-2 text-center text-gray-700 font-semibold">시즌</th>
                             <th className="px-2 py-2 text-right text-gray-700 font-semibold">택가 재고</th>
                             <th className="px-2 py-2 text-right text-gray-700 font-semibold">{periodLabel} 택가매출</th>
+                            <th className="px-2 py-2 text-right text-gray-700 font-semibold">YOY</th>
                             <th className="px-2 py-2 text-right text-gray-700 font-semibold">{periodLabel} 실판매출</th>
                             <th className="px-2 py-2 text-right text-gray-700 font-semibold">할인율 (%)</th>
                             <th className="px-2 py-2 text-right text-gray-700 font-semibold">재고일수 (일)</th>
@@ -1455,6 +1475,17 @@ export function OffSeasonInventoryDashboard({
                               </td>
                               <td className="px-2 py-2 text-right text-gray-700 whitespace-nowrap">
                                 {item.monthGrossK.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
+                              </td>
+                              <td className={`px-2 py-2 text-right font-semibold whitespace-nowrap ${
+                                item.pyMonthGross > 0 
+                                  ? (item.monthGrossK / item.pyMonthGross) >= 1 
+                                    ? 'text-green-600' 
+                                    : 'text-red-600'
+                                  : 'text-gray-500'
+                              }`}>
+                                {item.pyMonthGross > 0 
+                                  ? `${((item.monthGrossK / item.pyMonthGross) * 100).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}%`
+                                  : '-'}
                               </td>
                               <td className="px-2 py-2 text-right text-gray-700 whitespace-nowrap">
                                 {item.monthNetK.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
