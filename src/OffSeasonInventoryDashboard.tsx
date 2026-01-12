@@ -2543,27 +2543,21 @@ const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ ite
                       )}
                     </div>
                     <div className="flex items-center gap-3">
-                      {/* 접었을 때 합계 표시 */}
-                      {!isBucketOpen && (
-                        <div className="flex items-center gap-4 text-xs text-gray-600">
-                          <span>재고(QTY): <span className="font-semibold">{bucketTotalStockQty.toLocaleString('ko-KR')}</span></span>
-                          <span>택가재고: <span className="font-semibold text-red-500">{Math.round(bucketTotalStockTagK).toLocaleString('ko-KR')}K</span></span>
-                          <span>택가매출: <span className="font-semibold">{formatNumber(bucketTotalMonthGrossK)}</span></span>
-                          <span>실판매출: <span className="font-semibold">{formatNumber(bucketTotalMonthNetK)}</span></span>
-                          {bucketAvgDiscountRate !== null && (
-                            <span>할인율: <span className="font-semibold">{formatPercent(bucketAvgDiscountRate / 100)}</span></span>
-                          )}
-                        </div>
-                      )}
+                      {/* 합계 표시 (항상 표시) */}
+                      <div className="flex items-center gap-4 text-xs text-gray-600">
+                        <span>재고(QTY): <span className="font-semibold">{bucketTotalStockQty.toLocaleString('ko-KR')}</span></span>
+                        <span>택가재고: <span className="font-semibold text-red-500">{Math.round(bucketTotalStockTagK).toLocaleString('ko-KR')}K</span></span>
+                        <span>택가매출: <span className="font-semibold">{formatNumber(bucketTotalMonthGrossK)}</span></span>
+                        <span>실판매출: <span className="font-semibold">{formatNumber(bucketTotalMonthNetK)}</span></span>
+                        {bucketAvgDiscountRate !== null && (
+                          <span>할인율: <span className="font-semibold">{formatPercent(bucketAvgDiscountRate / 100)}</span></span>
+                        )}
+                      </div>
                       <span className={`text-xs text-gray-400 transition-transform ${isBucketOpen ? 'rotate-180' : ''}`}>
                         ▾
                       </span>
                     </div>
                   </button>
-                  
-                  {!isBucketOpen && (
-                    <div className="text-xs text-gray-500 ml-2 mb-2">단위: 1K HKD</div>
-                  )}
 
                   {/* 테이블 (접었을 때는 표시 안 함) */}
                   {isBucketOpen && showItems && (
