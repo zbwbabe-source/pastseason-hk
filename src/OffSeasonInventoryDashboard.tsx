@@ -951,6 +951,57 @@ export function OffSeasonInventoryDashboard({
                             </tr>
                           );
                         })}
+                        {/* 합계 행 */}
+                        <tr className="bg-blue-50 border-t-2 border-blue-300 font-semibold">
+                          <td className="px-4 py-2 text-left text-blue-900 whitespace-nowrap">합계</td>
+                          <td className="px-4 py-2 text-right text-blue-900">
+                            {(() => {
+                              const total = Object.values(categories).reduce((sum, d) => sum + d.tagSalesTarget, 0);
+                              return (total / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 }) + 'K';
+                            })()}
+                          </td>
+                          <td className="px-4 py-2 text-right text-blue-900">
+                            {(() => {
+                              const total = Object.values(categories).reduce((sum, d) => sum + d.tagSalesActual, 0);
+                              return (total / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 }) + 'K';
+                            })()}
+                          </td>
+                          <td className={`px-4 py-2 text-right font-bold ${(() => {
+                            const totalTarget = Object.values(categories).reduce((sum, d) => sum + d.tagSalesTarget, 0);
+                            const totalActual = Object.values(categories).reduce((sum, d) => sum + d.tagSalesActual, 0);
+                            const rate = totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0;
+                            return rate >= 100 ? 'bg-green-100 text-green-800' : rate >= 80 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800';
+                          })()}`}>
+                            {(() => {
+                              const totalTarget = Object.values(categories).reduce((sum, d) => sum + d.tagSalesTarget, 0);
+                              const totalActual = Object.values(categories).reduce((sum, d) => sum + d.tagSalesActual, 0);
+                              const rate = totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0;
+                              return rate.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+                            })()}
+                          </td>
+                          <td className="px-4 py-2 text-right text-blue-900">-</td>
+                          <td className="px-4 py-2 text-right text-blue-900 font-bold">
+                            {(() => {
+                              const totalGross = Object.values(categories).reduce((sum, d) => sum + d.tagSalesActual, 0);
+                              const totalNet = Object.values(categories).reduce((sum, d) => sum + d.netSalesActual, 0);
+                              const rate = totalGross > 0 ? (1 - totalNet / totalGross) * 100 : 0;
+                              return rate.toFixed(1) + '%';
+                            })()}
+                          </td>
+                          <td className="px-4 py-2 text-right text-blue-900">-</td>
+                          <td className="px-4 py-2 text-right text-blue-900">
+                            {(() => {
+                              const total = Object.values(categories).reduce((sum, d) => sum + d.stock2512Target, 0);
+                              return (total / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 }) + 'K';
+                            })()}
+                          </td>
+                          <td className="px-4 py-2 text-right text-blue-900 font-bold">
+                            {(() => {
+                              const total = Object.values(categories).reduce((sum, d) => sum + d.stock2512Actual, 0);
+                              return (total / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 }) + 'K';
+                            })()}
+                          </td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>
