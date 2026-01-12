@@ -276,6 +276,9 @@ export function OffSeasonInventoryDashboard({
   
   // AI 분석 섹션 토글 상태
   const [aiAnalysisOpen, setAiAnalysisOpen] = useState(false);
+  
+  // 전체 과시즌 합계 토글 상태
+  const [totalSectionOpen, setTotalSectionOpen] = useState(true);
 
   useEffect(() => {
     async function loadData() {
@@ -1377,6 +1380,92 @@ export function OffSeasonInventoryDashboard({
                     </div>
                   )}
                 </div>
+              );
+            })()}
+            
+            {/* 전체 과시즌 합계 */}
+            {(() => {
+              // Y1, Y2, Y3Plus 전체 합계 계산
+              const allBuckets = ['Y1', 'Y2', 'Y3Plus'] as const;
+              const totalCategories: Record<string, CategoryData> = {
+                'INNER': { tagSalesActual: 0, netSalesActual: 0, tagSalesTarget: 0, discountRateTarget: 0, discountRateActual: 0, stock2511: 0, stock2512Actual: 0, stock2512Target: 0 },
+                'OUTER': { tagSalesActual: 0, netSalesActual: 0, tagSalesTarget: 0, discountRateTarget: 0, discountRateActual: 0, stock2511: 0, stock2512Actual: 0, stock2512Target: 0 },
+                'BOTTOM': { tagSalesActual: 0, netSalesActual: 0, tagSalesTarget: 0, discountRateTarget: 0, discountRateActual: 0, stock2511: 0, stock2512Actual: 0, stock2512Target: 0 },
+                '의류기타': { tagSalesActual: 0, netSalesActual: 0, tagSalesTarget: 0, discountRateTarget: 0, discountRateActual: 0, stock2511: 0, stock2512Actual: 0, stock2512Target: 0 },
+              };
+              
+              // 모든 연차의 카테고리별 합계 계산
+              allBuckets.forEach(bucket => {
+                const bucketData = categoryAnalysis[bucket];
+                ['INNER', 'OUTER', 'BOTTOM', '의류기타'].forEach(cat => {
+                  const data = bucketData[cat];
+                  if (data) {
+                    totalCategories[cat].tagSalesActual += data.tagSalesActual;
+                    totalCategories[cat].netSalesActual += data.netSalesActual;
+                    totalCategories[cat].tagSalesTarget += data.tagSalesTarget;
+                    totalCategories[cat].stock2511 += data.stock2511;
+                    totalCategories[cat].stock2512Actual += data.stock2512Actual;
+                    totalCategories[cat].stock2512Target += data.stock2512Target;
+                  }
+                });
+              });
+              
+              // 할인율 계산
+              Object.keys(totalCategories).forEach(cat => {
+                const data = totalCategories[cat];
+                if (data.tagSalesActual > 0) {
+                  data.discountRateActual = 1 - (data.netSalesActual / data.tagSalesActual);
+                }
+                // 할인율 목표는 가중평균으로 계산
+                let weightedTarget = 0;
+                let totalTarget = 0;
+                allBuckets.forEach(bucket => {
+                  const bucketData = categoryAnalysis[bucket];
+                  const bucketCat = bucketData[cat];
+                  if (bucketCat && bucketCat.tagSalesTarget > 0) {
+                    weightedTarget += bucketCat.discountRateTarget * bucketCat.tagSalesTarget;
+                    totalTarget += bucketCat.tagSalesTarget;
+                  }
+                });
+                data.discountRateTarget = totalTarget > 0 ? weightedTarget / totalTarget : 0;
+              });
+              
+              // 전체 합계 계산
+              const totalAll: CategoryData = {
+                tagSalesActual: 0,
+                netSalesActual: 0,
+                tagSalesTarget: 0,
+                discountRateTarget: 0,
+                discountRateActual: 0,
+                stock2511: 0,
+                stock2512Actual: 0,
+                stock2512Target: 0,
+              };
+              
+              ['INNER', 'OUTER', 'BOTTOM', '의류기타'].forEach(cat => {
+                const data = totalCategories[cat];
+                totalAll.tagSalesActual += data.tagSalesActual;
+                totalAll.netSalesActual += data.netSalesActual;
+                totalAll.tagSalesTarget += data.tagSalesTarget;
+                totalAll.stock2511 += data.stock2511;
+                totalAll.stock2512Actual += data.stock2512Actual;
+                totalAll.stock2512Target += data.stock2512Target;
+              });
+              
+              if (totalAll.tagSalesActual > 0) {
+                totalAll.discountRateActual = 1 - (totalAll.netSalesActual / totalAll.tagSalesActual);
+              }
+              
+              totalCategories['합계'] = totalAll;
+              
+              return (
+                <YearBucketSection 
+                  key="total"
+                  bucketLabel="과시즌 합계 (24F, 23F, 22F~)"
+                  categories={totalCategories}
+                  isOpen={totalSectionOpen}
+                  onToggle={() => setTotalSectionOpen(!totalSectionOpen)}
+                />
               );
             })()}
             
