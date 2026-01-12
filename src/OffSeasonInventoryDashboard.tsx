@@ -1114,6 +1114,50 @@ export function OffSeasonInventoryDashboard({
         // 목표재고 = 기초재고 - 판매목표
         data.stock2512Target = data.stock2511 - data.tagSalesTarget;
       });
+      
+      // 각 연차별 합계 계산
+      const categories = ['INNER', 'OUTER', 'BOTTOM', '의류기타'];
+      const total: CategoryData = {
+        tagSalesActual: 0,
+        netSalesActual: 0,
+        tagSalesTarget: 0,
+        discountRateTarget: 0,
+        discountRateActual: 0,
+        stock2511: 0,
+        stock2512Actual: 0,
+        stock2512Target: 0,
+      };
+      
+      categories.forEach(cat => {
+        const data = result[bucket][cat];
+        total.tagSalesActual += data.tagSalesActual;
+        total.netSalesActual += data.netSalesActual;
+        total.tagSalesTarget += data.tagSalesTarget;
+        total.stock2511 += data.stock2511;
+        total.stock2512Actual += data.stock2512Actual;
+      });
+      
+      // 합계의 할인율 계산
+      if (total.tagSalesActual > 0) {
+        total.discountRateActual = 1 - (total.netSalesActual / total.tagSalesActual);
+      }
+      
+      // 합계의 목표재고
+      total.stock2512Target = total.stock2511 - total.tagSalesTarget;
+      
+      // 합계의 목표 할인율 (가중평균)
+      let weightedDiscountTarget = 0;
+      let totalTarget = 0;
+      categories.forEach(cat => {
+        const data = result[bucket][cat];
+        if (data.tagSalesTarget > 0) {
+          weightedDiscountTarget += data.discountRateTarget * data.tagSalesTarget;
+          totalTarget += data.tagSalesTarget;
+        }
+      });
+      total.discountRateTarget = totalTarget > 0 ? weightedDiscountTarget / totalTarget : 0;
+      
+      result[bucket]['합계'] = total;
     });
     
     console.log('Category analysis:', result);
@@ -1263,11 +1307,24 @@ export function OffSeasonInventoryDashboard({
               
               // 할인율 분석
               analysisText += '💡 할인율 전략: ';
-              if (y2DiscountDiff < 0 || y3DiscountDiff < 0) {
-                analysisText += `2년차(${y2DiscountDiff > 0 ? '+' : ''}${y2DiscountDiff.toFixed(1)}%p)와 3년차(${y3DiscountDiff > 0 ? '+' : ''}${y3DiscountDiff.toFixed(1)}%p)는 `;
-                analysisText += '목표 대비 할인율이 낮아 판매 부진의 주요 원인으로 보입니다. 공격적인 할인 프로모션이 필요합니다. ';
+              
+              // 할인율 차이가 음수 = 실적이 목표보다 낮음 = 할인을 덜 함
+              const y2NeedsMoreDiscount = y2DiscountDiff < 0;
+              const y3NeedsMoreDiscount = y3DiscountDiff < 0;
+              
+              if (y2NeedsMoreDiscount || y3NeedsMoreDiscount) {
+                if (y2NeedsMoreDiscount && y3NeedsMoreDiscount) {
+                  analysisText += `2년차(${y2DiscountDiff.toFixed(1)}%p)와 3년차(${y3DiscountDiff.toFixed(1)}%p) 모두 `;
+                  analysisText += '목표 대비 할인율이 낮아 판매 부진의 주요 원인으로 보입니다. 공격적인 할인 프로모션이 필요합니다. ';
+                } else if (y2NeedsMoreDiscount) {
+                  analysisText += `2년차(${y2DiscountDiff.toFixed(1)}%p)는 목표 대비 할인율이 낮습니다. `;
+                  analysisText += `3년차(${y3DiscountDiff.toFixed(1)}%p)는 할인율이 높으나 판매 실적이 부진합니다. `;
+                } else {
+                  analysisText += `3년차(${y3DiscountDiff.toFixed(1)}%p)는 목표 대비 할인율이 낮습니다. `;
+                  analysisText += `2년차(${y2DiscountDiff.toFixed(1)}%p)는 할인율이 높으나 판매 실적이 부진합니다. `;
+                }
               } else {
-                analysisText += `2년차와 3년차의 할인율이 목표보다 높게 운영되었으나, 판매 실적이 부진합니다. `;
+                analysisText += `2년차(${y2DiscountDiff > 0 ? '+' : ''}${y2DiscountDiff.toFixed(1)}%p)와 3년차(${y3DiscountDiff > 0 ? '+' : ''}${y3DiscountDiff.toFixed(1)}%p)의 할인율이 목표보다 높게 운영되었으나, 판매 실적이 부진합니다. `;
               }
               
               analysisText += '\n\n';
