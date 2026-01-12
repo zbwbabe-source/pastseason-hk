@@ -849,6 +849,7 @@ export function OffSeasonInventoryDashboard({
     itemDesc2: string | null;
     seasonCode: string;
     yearBucket: YearBucket;
+    stockQty: number; // 재고 수량
     stockTagK: number;
     monthGrossK: number;
     monthNetK: number;
@@ -876,6 +877,7 @@ export function OffSeasonInventoryDashboard({
       itemDesc2: string | null;
       seasonCode: string;
       yearBucket: YearBucket;
+      stockQty: number; // 재고 수량
       stockTag: number;
       monthGross: number;
       monthNet: number;
@@ -885,6 +887,7 @@ export function OffSeasonInventoryDashboard({
     cyFiltered.forEach(row => {
       const existing = itemMap.get(row.itemCode);
       if (existing) {
+        existing.stockQty += row.stockQty;
         existing.stockTag += row.stockPriceFx;
         existing.monthGross += row.grossSalesFx;
         existing.monthNet += row.netSalesFx;
@@ -898,6 +901,7 @@ export function OffSeasonInventoryDashboard({
           itemDesc2: row.itemDesc2,
           seasonCode: row.seasonInfo.seasonCode,
           yearBucket: row.seasonInfo.yearBucket,
+          stockQty: row.stockQty,
           stockTag: row.stockPriceFx,
           monthGross: row.grossSalesFx,
           monthNet: row.netSalesFx,
@@ -928,6 +932,7 @@ export function OffSeasonInventoryDashboard({
         itemDesc2: data.itemDesc2,
         seasonCode: data.seasonCode,
         yearBucket: data.yearBucket,
+        stockQty: data.stockQty,
         stockTagK,
         monthGrossK,
         monthNetK,
@@ -964,6 +969,7 @@ export function OffSeasonInventoryDashboard({
       itemDesc2: string | null;
       seasonCode: string;
       yearBucket: YearBucket;
+      stockQty: number; // 재고 수량
       stockTag: number;
       monthGross: number;
       monthNet: number;
@@ -979,12 +985,14 @@ export function OffSeasonInventoryDashboard({
           itemDesc2: row.itemDesc2,
           seasonCode: row.seasonInfo.seasonCode,
           yearBucket: row.seasonInfo.yearBucket,
+          stockQty: 0,
           stockTag: 0,
           monthGross: 0,
           monthNet: 0,
         });
       }
       const item = itemMap.get(key)!;
+      item.stockQty += row.stockQty;
       item.stockTag += row.stockPriceFx;
       item.monthGross += row.grossSalesFx;
       item.monthNet += row.netSalesFx;
@@ -1006,6 +1014,7 @@ export function OffSeasonInventoryDashboard({
             itemDesc2: item.itemDesc2,
             seasonCode: item.seasonCode,
             yearBucket: item.yearBucket,
+            stockQty: item.stockQty,
             stockTagK: item.stockTag / 1000,
             monthGrossK: item.monthGross / 1000,
             monthNetK: item.monthNet / 1000,
@@ -2166,6 +2175,7 @@ type StagnantByVintageSectionProps = {
     itemDesc2: string | null;
     seasonCode: string;
     yearBucket: YearBucket;
+    stockQty: number; // 재고 수량
     stockTagK: number;
     monthGrossK: number;
     monthNetK: number;
@@ -2228,6 +2238,7 @@ const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ ite
     itemDesc2: string | null;
     seasonCode: string;
     yearBucket: YearBucket;
+    stockQty: number; // 재고 수량
     stockTagK: number;
     monthGrossK: number;
     monthNetK: number;
@@ -2498,6 +2509,7 @@ const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ ite
                         <col style={{ width: '140px' }} />
                         <col style={{ width: '200px' }} />
                         <col style={{ width: '64px' }} />
+                        <col style={{ width: '70px' }} />
                         <col style={{ width: '90px' }} />
                         <col style={{ width: '110px' }} />
                         <col style={{ width: '110px' }} />
@@ -2511,6 +2523,7 @@ const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ ite
                           <th className="px-2 py-1 text-left">SUBCATEGORY</th>
                           <th className="px-2 py-1 text-left">ITEM DESC2</th>
                           <th className="px-2 py-1 text-center w-16">시즌</th>
+                          <th className="px-2 py-1 text-right">재고 (QTY)</th>
                           <th 
                             className="px-2 py-1 text-right cursor-pointer hover:bg-gray-100 select-none"
                             onClick={() => handleSort(bucket, 'stockTagK')}
@@ -2568,6 +2581,9 @@ const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ ite
                             <td className="px-2 py-1 text-left text-gray-700">{item.subcategory}</td>
                             <td className="px-2 py-1 text-left text-gray-700">{item.itemDesc2 || '-'}</td>
                             <td className="px-2 py-1 text-center text-gray-700 w-16">{item.seasonCode}</td>
+                            <td className="px-2 py-1 text-right text-gray-700">
+                              {item.stockQty.toLocaleString('ko-KR')}
+                            </td>
                             <td className="px-2 py-1 text-right text-red-500 font-semibold">
                               {Math.round(item.stockTagK).toLocaleString('ko-KR')}
                             </td>
@@ -2613,6 +2629,7 @@ type StagnantBucketToggleProps = {
     subcategoryName: string;
     itemDesc2: string | null;
     seasonCode: string;
+    stockQty: number; // 재고 수량
     stockTagK: number;
     monthGrossK: number;
     monthNetK: number;
@@ -2641,6 +2658,7 @@ const StagnantBucketToggle: React.FC<StagnantBucketToggleProps> = ({ items }) =>
               <col style={{ width: '140px' }} />
               <col style={{ width: '200px' }} />
               <col style={{ width: '64px' }} />
+              <col style={{ width: '70px' }} />
               <col style={{ width: '90px' }} />
               <col style={{ width: '110px' }} />
               <col style={{ width: '110px' }} />
@@ -2657,6 +2675,9 @@ const StagnantBucketToggle: React.FC<StagnantBucketToggleProps> = ({ items }) =>
                   <td className="px-2 py-1 text-left text-gray-700">{item.subcategory}</td>
                   <td className="px-2 py-1 text-left text-gray-700">{item.itemDesc2 || '-'}</td>
                   <td className="px-2 py-1 text-center text-gray-700 w-16">{item.seasonCode}</td>
+                  <td className="px-2 py-1 text-right text-gray-700">
+                    {item.stockQty.toLocaleString('ko-KR')}
+                  </td>
                   <td className="px-2 py-1 text-right text-red-500 font-semibold">
                     {Math.round(item.stockTagK).toLocaleString('ko-KR')}
                   </td>
