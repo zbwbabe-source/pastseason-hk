@@ -135,12 +135,17 @@ const YearBucketSection: React.FC<YearBucketSectionProps> = ({ bucketLabel, cate
                     <td className={`px-4 py-2 text-right font-semibold ${
                       data.stock2512Actual > data.stock2512Target 
                         ? 'bg-red-50 text-red-700 border-l-4 border-red-500' 
+                        : data.stock2512Actual < data.stock2512Target
+                        ? 'bg-green-50 text-green-700 border-l-4 border-green-500'
                         : 'text-blue-900'
                     }`}>
                       {(data.stock2512Actual / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
-                      {data.stock2512Actual > data.stock2512Target && (
+                      {data.stock2512Actual !== data.stock2512Target && (
                         <span className="ml-1 text-xs">
-                          ⚠️ +{((data.stock2512Actual - data.stock2512Target) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
+                          {data.stock2512Actual > data.stock2512Target 
+                            ? `⚠️ +${((data.stock2512Actual - data.stock2512Target) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K`
+                            : `✓ ${((data.stock2512Actual - data.stock2512Target) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K`
+                          }
                         </span>
                       )}
                     </td>
@@ -179,12 +184,17 @@ const YearBucketSection: React.FC<YearBucketSectionProps> = ({ bucketLabel, cate
                 <td className={`px-4 py-2 text-right font-bold ${
                   totalStock2512Actual > totalStock2512Target 
                     ? 'bg-red-100 text-red-800 border-l-4 border-red-600' 
+                    : totalStock2512Actual < totalStock2512Target
+                    ? 'bg-green-100 text-green-800 border-l-4 border-green-600'
                     : 'text-blue-900'
                 }`}>
                   {(totalStock2512Actual / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
-                  {totalStock2512Actual > totalStock2512Target && (
+                  {totalStock2512Actual !== totalStock2512Target && (
                     <span className="ml-1 text-xs">
-                      ⚠️ +{((totalStock2512Actual - totalStock2512Target) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
+                      {totalStock2512Actual > totalStock2512Target 
+                        ? `⚠️ +${((totalStock2512Actual - totalStock2512Target) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K`
+                        : `✓ ${((totalStock2512Actual - totalStock2512Target) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K`
+                      }
                     </span>
                   )}
                 </td>
