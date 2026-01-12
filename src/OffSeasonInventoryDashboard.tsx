@@ -835,6 +835,7 @@ export function OffSeasonInventoryDashboard({
   // 정체재고 분석을 위한 타입 정의
   type StagnantItem = {
     itemCode: string;
+    subcategory: string; // SUBCATEGORY 축약형 (O열)
     subcategoryName: string;
     itemDesc2: string | null;
     seasonCode: string;
@@ -949,6 +950,7 @@ export function OffSeasonInventoryDashboard({
     // 품번별로 집계
     const itemMap = new Map<string, {
       itemCode: string;
+      subcategory: string; // SUBCATEGORY 축약형 (O열)
       subcategoryName: string;
       itemDesc2: string | null;
       seasonCode: string;
@@ -963,6 +965,7 @@ export function OffSeasonInventoryDashboard({
       if (!itemMap.has(key)) {
         itemMap.set(key, {
           itemCode: row.itemCode,
+          subcategory: row.subcategory, // O열 축약형
           subcategoryName: row.subcategoryName,
           itemDesc2: row.itemDesc2,
           seasonCode: row.seasonInfo.seasonCode,
@@ -989,6 +992,7 @@ export function OffSeasonInventoryDashboard({
 
           stagnantItems.push({
             itemCode: item.itemCode,
+            subcategory: item.subcategory,
             subcategoryName: item.subcategoryName,
             itemDesc2: item.itemDesc2,
             seasonCode: item.seasonCode,
@@ -1773,6 +1777,7 @@ export function OffSeasonInventoryDashboard({
 type StagnantByVintageSectionProps = {
   itemsByBucket: Record<YearBucket, Array<{
     itemCode: string;
+    subcategory: string; // SUBCATEGORY 축약형 (O열)
     subcategoryName: string;
     itemDesc2: string | null;
     seasonCode: string;
@@ -2019,7 +2024,7 @@ const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ ite
                         <tr className="border-b border-gray-200 bg-gray-50 text-[11px] text-gray-500">
                           <th className="px-2 py-1 text-right w-10">순위</th>
                           <th className="px-2 py-1 text-left">Item Code</th>
-                          <th className="px-2 py-1 text-left">SUBCATEGORY NAME</th>
+                          <th className="px-2 py-1 text-left">SUBCATEGORY</th>
                           <th className="px-2 py-1 text-left">ITEM DESC2</th>
                           <th className="px-2 py-1 text-center w-16">시즌</th>
                           <th className="px-2 py-1 text-right">택가 재고</th>
@@ -2036,7 +2041,7 @@ const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ ite
                               {index + 1}
                             </td>
                             <td className="px-2 py-1 text-left text-gray-700 font-medium">{item.itemCode}</td>
-                            <td className="px-2 py-1 text-left text-gray-700">{item.subcategoryName}</td>
+                            <td className="px-2 py-1 text-left text-gray-700">{item.subcategory}</td>
                             <td className="px-2 py-1 text-left text-gray-700">{item.itemDesc2 || '-'}</td>
                             <td className="px-2 py-1 text-center text-gray-700 w-16">{item.seasonCode}</td>
                             <td className="px-2 py-1 text-right text-red-500 font-semibold">
@@ -2080,6 +2085,7 @@ const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ ite
 type StagnantBucketToggleProps = {
   items: Array<{
     itemCode: string;
+    subcategory: string; // SUBCATEGORY 축약형 (O열)
     subcategoryName: string;
     itemDesc2: string | null;
     seasonCode: string;
@@ -2124,7 +2130,7 @@ const StagnantBucketToggle: React.FC<StagnantBucketToggleProps> = ({ items }) =>
                     {index + 4}
                   </td>
                   <td className="px-2 py-1 text-left text-gray-700 font-medium">{item.itemCode}</td>
-                  <td className="px-2 py-1 text-left text-gray-700">{item.subcategoryName}</td>
+                  <td className="px-2 py-1 text-left text-gray-700">{item.subcategory}</td>
                   <td className="px-2 py-1 text-left text-gray-700">{item.itemDesc2 || '-'}</td>
                   <td className="px-2 py-1 text-center text-gray-700 w-16">{item.seasonCode}</td>
                   <td className="px-2 py-1 text-right text-red-500 font-semibold">
