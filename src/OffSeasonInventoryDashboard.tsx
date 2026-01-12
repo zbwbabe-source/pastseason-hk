@@ -39,11 +39,11 @@ type CategoryData = {
 type YearBucketSectionProps = {
   bucketLabel: string;
   categories: Record<string, CategoryData>;
+  isOpen: boolean;
+  onToggle: () => void;
 };
 
-const YearBucketSection: React.FC<YearBucketSectionProps> = ({ bucketLabel, categories }) => {
-  const [isOpen, setIsOpen] = useState(true);
-  
+const YearBucketSection: React.FC<YearBucketSectionProps> = ({ bucketLabel, categories, isOpen, onToggle }) => {
   // 합계 계산
   const totalTarget = Object.values(categories).reduce((sum, d) => sum + d.tagSalesTarget, 0);
   const totalActual = Object.values(categories).reduce((sum, d) => sum + d.tagSalesActual, 0);
@@ -56,7 +56,8 @@ const YearBucketSection: React.FC<YearBucketSectionProps> = ({ bucketLabel, cate
       {/* 헤더 (토글 버튼) */}
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={onToggle}
+        data-bucket-open={isOpen}
         className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-t-lg transition"
       >
         <div className="flex items-center gap-3">
@@ -241,6 +242,9 @@ export function OffSeasonInventoryDashboard({
   const [targetData, setTargetData] = useState<TargetDataRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // 연차별 열림/닫힘 상태 관리 (Y1, Y2, Y3Plus 순서)
+  const [yearBucketStates, setYearBucketStates] = useState<boolean[]>([true, true, true]);
 
   useEffect(() => {
     async function loadData() {
@@ -1036,13 +1040,26 @@ export function OffSeasonInventoryDashboard({
         {/* 과시즌재고현황 섹션 */}
         <section className="mb-8">
           <div className="bg-white rounded-lg shadow-md p-6 border-2 border-purple-200">
-            <div className="flex items-center gap-3 mb-6">
-              <span className="text-2xl">📊</span>
-              <h2 className="text-xl font-bold text-purple-900">과시즌재고현황</h2>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">📊</span>
+                <h2 className="text-xl font-bold text-purple-900">과시즌재고현황</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  // 현재 하나라도 열려있으면 전체 닫기, 모두 닫혀있으면 전체 열기
+                  const hasOpen = yearBucketStates.some(state => state);
+                  setYearBucketStates(hasOpen ? [false, false, false] : [true, true, true]);
+                }}
+                className="px-4 py-2 text-sm font-medium text-purple-700 bg-purple-50 border border-purple-300 rounded-lg hover:bg-purple-100 transition"
+              >
+                {yearBucketStates.some(state => state) ? '전체 접기' : '전체 펼치기'}
+              </button>
             </div>
             
             {/* 연차별 테이블 */}
-            {(['Y1', 'Y2', 'Y3Plus'] as const).map((bucket) => {
+            {(['Y1', 'Y2', 'Y3Plus'] as const).map((bucket, index) => {
               const bucketLabel = bucket === 'Y1' ? '1년차 (24F)' : bucket === 'Y2' ? '2년차 (23F)' : '3년차~ (22F~)';
               const categories = categoryAnalysis[bucket];
               
@@ -1050,7 +1067,13 @@ export function OffSeasonInventoryDashboard({
                 <YearBucketSection 
                   key={bucket} 
                   bucketLabel={bucketLabel} 
-                  categories={categories} 
+                  categories={categories}
+                  isOpen={yearBucketStates[index]}
+                  onToggle={() => {
+                    const newStates = [...yearBucketStates];
+                    newStates[index] = !newStates[index];
+                    setYearBucketStates(newStates);
+                  }}
                 />
               );
             })}
