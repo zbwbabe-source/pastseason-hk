@@ -132,8 +132,17 @@ const YearBucketSection: React.FC<YearBucketSectionProps> = ({ bucketLabel, cate
                     <td className="px-4 py-2 text-right text-blue-700 font-medium">
                       {(data.stock2512Target / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
                     </td>
-                    <td className="px-4 py-2 text-right text-blue-900 font-semibold">
+                    <td className={`px-4 py-2 text-right font-semibold ${
+                      data.stock2512Actual > data.stock2512Target 
+                        ? 'bg-red-50 text-red-700 border-l-4 border-red-500' 
+                        : 'text-blue-900'
+                    }`}>
                       {(data.stock2512Actual / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
+                      {data.stock2512Actual > data.stock2512Target && (
+                        <span className="ml-1 text-xs">
+                          ⚠️ +{((data.stock2512Actual - data.stock2512Target) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
+                        </span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -167,8 +176,17 @@ const YearBucketSection: React.FC<YearBucketSectionProps> = ({ bucketLabel, cate
                 <td className="px-4 py-2 text-right text-blue-900">
                   {(totalStock2512Target / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
                 </td>
-                <td className="px-4 py-2 text-right text-blue-900 font-bold">
+                <td className={`px-4 py-2 text-right font-bold ${
+                  totalStock2512Actual > totalStock2512Target 
+                    ? 'bg-red-100 text-red-800 border-l-4 border-red-600' 
+                    : 'text-blue-900'
+                }`}>
                   {(totalStock2512Actual / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
+                  {totalStock2512Actual > totalStock2512Target && (
+                    <span className="ml-1 text-xs">
+                      ⚠️ +{((totalStock2512Actual - totalStock2512Target) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}K
+                    </span>
+                  )}
                 </td>
               </tr>
             </tbody>
