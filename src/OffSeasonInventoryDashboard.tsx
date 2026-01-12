@@ -1375,14 +1375,24 @@ export function OffSeasonInventoryDashboard({
               
               const ItemBucketTable = () => {
                 const [selectedCategory, setSelectedCategory] = useState<string>('전체');
+                const [showAll, setShowAll] = useState(false);
                 
                 // 카테고리 필터링
                 const filteredItems = selectedCategory === '전체' 
                   ? items 
                   : items.filter(item => item.mappedCategory === selectedCategory);
                 
-                // 상위 5개만 표시
-                const displayItems = filteredItems.slice(0, 5);
+                // 기본 5개, 더보기 클릭 시 전체 표시
+                const displayItems = showAll ? filteredItems : filteredItems.slice(0, 5);
+                
+                // 필터링된 항목의 합계 계산
+                const totalStockTag = filteredItems.reduce((sum, item) => sum + item.stockTagK, 0);
+                const totalMonthGross = filteredItems.reduce((sum, item) => sum + item.monthGrossK, 0);
+                const totalMonthNet = filteredItems.reduce((sum, item) => sum + item.monthNetK, 0);
+                const totalDiscountRate = totalMonthGross > 0 ? (1 - totalMonthNet / totalMonthGross) * 100 : 0;
+                const totalInventoryDays = filteredItems.length > 0 
+                  ? filteredItems.reduce((sum, item) => sum + (item.inventoryDays || 0), 0) / filteredItems.length 
+                  : 0;
                 
                 // 카테고리별 개수 집계
                 const categoryCounts = {
@@ -1401,7 +1411,10 @@ export function OffSeasonInventoryDashboard({
                         <button
                           key={cat}
                           type="button"
-                          onClick={() => setSelectedCategory(cat)}
+                          onClick={() => {
+                            setSelectedCategory(cat);
+                            setShowAll(false); // 필터 변경 시 접기
+                          }}
                           className={`px-3 py-1.5 text-xs font-medium rounded-md transition ${
                             selectedCategory === cat
                               ? 'bg-indigo-600 text-white'
@@ -1478,9 +1491,44 @@ export function OffSeasonInventoryDashboard({
                               </td>
                             </tr>
                           ))}
+                          {/* 필터링된 항목 합계 행 */}
+                          {filteredItems.length > 0 && (
+                            <tr className="bg-indigo-50 border-t-2 border-indigo-300 font-semibold">
+                              <td colSpan={6} className="px-2 py-2 text-left text-indigo-900 whitespace-nowrap">
+                                {selectedCategory === '전체' ? '합계' : `${selectedCategory} 합계`} ({filteredItems.length}개)
+                              </td>
+                              <td className="px-2 py-2 text-right text-indigo-900 font-bold whitespace-nowrap">
+                                {totalStockTag.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
+                              </td>
+                              <td className="px-2 py-2 text-right text-indigo-900 font-bold whitespace-nowrap">
+                                {totalMonthGross.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
+                              </td>
+                              <td className="px-2 py-2 text-right text-indigo-900 font-bold whitespace-nowrap">
+                                {totalMonthNet.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
+                              </td>
+                              <td className="px-2 py-2 text-right text-indigo-900 font-bold whitespace-nowrap">
+                                {totalDiscountRate.toFixed(1)}
+                              </td>
+                              <td className="px-2 py-2 text-right text-indigo-900 font-bold whitespace-nowrap">
+                                {Math.round(totalInventoryDays)}
+                              </td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
                     </div>
+                    
+                    {filteredItems.length > 5 && (
+                      <div className="mt-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setShowAll(!showAll)}
+                          className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                        >
+                          {showAll ? '접기 ▲' : `더보기 (${filteredItems.length - 5}개 더) ▼`}
+                        </button>
+                      </div>
+                    )}
                   </>
                 );
               };
