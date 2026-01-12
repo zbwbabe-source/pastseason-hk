@@ -289,12 +289,9 @@ function App() {
                     CY: <span className="font-medium">{cyFileName}</span> ({cyRowsRaw.length}행)
                   </p>
                 </div>
-                <button
-                  onClick={handleReset}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-                >
-                  파일 변경
-                </button>
+                <p className="text-xs text-gray-500 italic">
+                  추후 자동업데이트 예정
+                </p>
               </div>
             </div>
           </div>
