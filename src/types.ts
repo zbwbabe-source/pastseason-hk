@@ -82,6 +82,7 @@ export type GraphDataRowRaw = {
   Stock_Price: number;
   Stock_Cost: number;
   Country: string; // "HK", "MC", "TW"
+  Category: string; // "ATC", "OUT", "INN", "BOT" 등
 };
 
 /**
@@ -96,6 +97,8 @@ export type GraphDataRow = GraphDataRowRaw & {
   stockPriceFx: number;
   stockCostFx: number;
   country: string; // Country와 동일 (대문자)
+  category: string; // Category 원본
+  mappedCategory: CategoryType; // 표준화된 카테고리
   seasonInfo: SeasonInfo;
   discountRate: number | null;
 };

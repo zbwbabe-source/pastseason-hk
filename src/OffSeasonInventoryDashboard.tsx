@@ -749,7 +749,7 @@ export function OffSeasonInventoryDashboard({
     return grouped;
   }, [filteredData]);
 
-  // 카테고리별 목표 대비 분석
+  // 카테고리별 목표 대비 분석 (Graph 데이터 사용)
   const categoryAnalysis = useMemo(() => {
     console.log('=== 카테고리별 분석 ===');
     
@@ -773,16 +773,22 @@ export function OffSeasonInventoryDashboard({
       };
     });
     
-    // 실적 집계 (filteredData 사용)
-    filteredData.forEach(row => {
-      const bucket = row.seasonInfo.yearBucket;
-      const category = row.mappedCategory;
-      
-      if (bucket in result && category in result[bucket]) {
-        result[bucket][category].tagSalesActual += row.grossSalesFx;
-        result[bucket][category].netSalesActual += row.netSalesFx;
-      }
-    });
+    // 실적 집계 (graphData에서 2512 과시즌 FW, HK+MO)
+    graphData
+      .filter(row => 
+        row.period === '2512' && 
+        (row.country === 'HK' || row.country === 'MO') && 
+        isOffSeasonFW(row)
+      )
+      .forEach(row => {
+        const bucket = row.seasonInfo.yearBucket;
+        const category = row.mappedCategory;
+        
+        if (bucket in result && category in result[bucket]) {
+          result[bucket][category].tagSalesActual += row.grossSalesFx;
+          result[bucket][category].netSalesActual += row.netSalesFx;
+        }
+      });
     
     // 목표 집계 (targetData에서)
     targetData.filter(t => t.period === '2025-12').forEach(target => {
@@ -807,92 +813,6 @@ export function OffSeasonInventoryDashboard({
     
     console.log('Category analysis:', result);
     return result;
-  }, [filteredData, targetData]);
-
-  // 월 목표대비 현황 계산
-  const monthlyTargetStatus = useMemo(() => {
-    console.log('=== 월 목표대비 현황 계산 ===');
-    console.log('Graph data rows:', graphData.length);
-    console.log('Target data rows:', targetData.length);
-
-    // 2511과 2512 데이터 필터링 (HK + MO, 과시즌 FW)
-    const nov2511 = graphData.filter(
-      row => row.period === '2511' && (row.country === 'HK' || row.country === 'MO') && isOffSeasonFW(row)
-    );
-    const dec2512 = graphData.filter(
-      row => row.period === '2512' && (row.country === 'HK' || row.country === 'MO') && isOffSeasonFW(row)
-    );
-
-    console.log('2511 off-season rows:', nov2511.length);
-    console.log('2512 off-season rows:', dec2512.length);
-
-    // 연차별 집계
-    type YearlyData = {
-      stock: number; // 택가 재고
-      sales: number; // 택가 판매
-      target: number; // 목표
-    };
-
-    const calculate = (rows: GraphDataRow[]): Record<YearBucket, YearlyData> => {
-      const result: Record<YearBucket, YearlyData> = {
-        Y1: { stock: 0, sales: 0, target: 0 },
-        Y2: { stock: 0, sales: 0, target: 0 },
-        Y3Plus: { stock: 0, sales: 0, target: 0 },
-        InSeason: { stock: 0, sales: 0, target: 0 },
-      };
-
-      // 실적 집계
-      rows.forEach(row => {
-        const bucket = row.seasonInfo.yearBucket;
-        if (bucket in result) {
-          result[bucket].stock += row.stockPriceFx;
-          result[bucket].sales += row.grossSalesFx;
-        }
-      });
-
-      // 목표 집계는 항상 2512 기준 (2025-12)
-      console.log(`Filtering targets for period: 2025-12`);
-      const filteredTargets = targetData.filter(t => t.period === '2025-12');
-      console.log(`Targets for 2025-12:`, filteredTargets.length);
-      
-      // 시즌별로 목표 합계
-      const targetBySeason: Record<string, number> = {};
-      filteredTargets.forEach(t => {
-        const season = t.season; // "22F", "23F", "24F" 등
-        if (!targetBySeason[season]) {
-          targetBySeason[season] = 0;
-        }
-        targetBySeason[season] += t.tagSales;
-      });
-      
-      console.log('Target by season:', targetBySeason);
-      
-      // 시즌별 목표를 연차별로 분류
-      // 25년 기준: 24FW=Y1, 23FW=Y2, 22FW=Y3Plus
-      Object.entries(targetBySeason).forEach(([season, amount]) => {
-        // "22FW" -> "22F"로 변환하여 parseSeason 사용
-        const seasonCode = season.replace('FW', 'F').replace('SS', 'S');
-        const seasonInfo = parseSeason(seasonCode, 25);
-        console.log(`Season ${season} (${seasonCode}) -> yearBucket: ${seasonInfo.yearBucket}, amount: ${amount}`);
-        
-        if (seasonInfo.seasonType === 'FW') {
-          const bucket = seasonInfo.yearBucket;
-          if (bucket === 'Y1' || bucket === 'Y2' || bucket === 'Y3Plus') {
-            result[bucket].target += amount;
-          }
-        }
-      });
-
-      return result;
-    };
-
-    const nov = calculate(nov2511);  // 목표는 2512 기준
-    const dec = calculate(dec2512);  // 목표는 2512 기준
-
-    console.log('November data:', nov);
-    console.log('December data:', dec);
-
-    return { nov, dec };
   }, [graphData, targetData]);
 
 
@@ -934,165 +854,6 @@ export function OffSeasonInventoryDashboard({
             {periodLabel}
           </div>
         </div>
-
-        {/* 월 목표대비 현황 섹션 */}
-        <section className="mb-8">
-          <div className="bg-white rounded-lg shadow-md p-6 border-2 border-indigo-200">
-            <div className="flex items-center gap-3 mb-6">
-              <span className="text-2xl">🎯</span>
-              <h2 className="text-xl font-bold text-indigo-900">월 목표대비 현황</h2>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-700 whitespace-nowrap">구분</th>
-                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">2511 기말재고</th>
-                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">판매 목표</th>
-                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">판매 실적</th>
-                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">달성률 (%)</th>
-                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">2512 기말재고 목표</th>
-                    <th className="px-4 py-2 text-right text-xs font-semibold text-gray-700 whitespace-nowrap">2512 기말재고 실적</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {/* 1년차 */}
-                  <tr className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="px-4 py-2 text-left text-gray-900 font-medium whitespace-nowrap">1년차 (24F)</td>
-                    <td className="px-4 py-2 text-right text-gray-700">
-                      {(monthlyTargetStatus.nov.Y1.stock / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className="px-4 py-2 text-right text-gray-700">
-                      {(monthlyTargetStatus.dec.Y1.target / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className="px-4 py-2 text-right text-gray-700">
-                      {(monthlyTargetStatus.dec.Y1.sales / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className={`px-4 py-2 text-right font-semibold ${
-                      monthlyTargetStatus.dec.Y1.target > 0 && 
-                      (monthlyTargetStatus.dec.Y1.sales / monthlyTargetStatus.dec.Y1.target) * 100 >= 100
-                        ? 'bg-green-50 text-green-700'
-                        : monthlyTargetStatus.dec.Y1.target > 0 && 
-                          (monthlyTargetStatus.dec.Y1.sales / monthlyTargetStatus.dec.Y1.target) * 100 >= 80
-                        ? 'bg-yellow-50 text-yellow-700'
-                        : 'bg-red-50 text-red-700'
-                    }`}>
-                      {monthlyTargetStatus.dec.Y1.target > 0
-                        ? ((monthlyTargetStatus.dec.Y1.sales / monthlyTargetStatus.dec.Y1.target) * 100).toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-                        : '-'}%
-                    </td>
-                    <td className="px-4 py-2 text-right text-gray-700">
-                      {((monthlyTargetStatus.nov.Y1.stock - monthlyTargetStatus.dec.Y1.target) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className="px-4 py-2 text-right text-gray-700">
-                      {(monthlyTargetStatus.dec.Y1.stock / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                  </tr>
-                  {/* 2년차 */}
-                  <tr className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="px-4 py-2 text-left text-gray-900 font-medium whitespace-nowrap">2년차 (23F)</td>
-                    <td className="px-4 py-2 text-right text-gray-700">
-                      {(monthlyTargetStatus.nov.Y2.stock / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className="px-4 py-2 text-right text-gray-700">
-                      {(monthlyTargetStatus.dec.Y2.target / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className="px-4 py-2 text-right text-gray-700">
-                      {(monthlyTargetStatus.dec.Y2.sales / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className={`px-4 py-2 text-right font-semibold ${
-                      monthlyTargetStatus.dec.Y2.target > 0 && 
-                      (monthlyTargetStatus.dec.Y2.sales / monthlyTargetStatus.dec.Y2.target) * 100 >= 100
-                        ? 'bg-green-50 text-green-700'
-                        : monthlyTargetStatus.dec.Y2.target > 0 && 
-                          (monthlyTargetStatus.dec.Y2.sales / monthlyTargetStatus.dec.Y2.target) * 100 >= 80
-                        ? 'bg-yellow-50 text-yellow-700'
-                        : 'bg-red-50 text-red-700'
-                    }`}>
-                      {monthlyTargetStatus.dec.Y2.target > 0
-                        ? ((monthlyTargetStatus.dec.Y2.sales / monthlyTargetStatus.dec.Y2.target) * 100).toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-                        : '-'}%
-                    </td>
-                    <td className="px-4 py-2 text-right text-gray-700">
-                      {((monthlyTargetStatus.nov.Y2.stock - monthlyTargetStatus.dec.Y2.target) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className="px-4 py-2 text-right text-gray-700">
-                      {(monthlyTargetStatus.dec.Y2.stock / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                  </tr>
-                  {/* 3년차~ */}
-                  <tr className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="px-4 py-2 text-left text-gray-900 font-medium whitespace-nowrap">3년차~ (22F~)</td>
-                    <td className="px-4 py-2 text-right text-gray-700">
-                      {(monthlyTargetStatus.nov.Y3Plus.stock / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className="px-4 py-2 text-right text-gray-700">
-                      {(monthlyTargetStatus.dec.Y3Plus.target / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className="px-4 py-2 text-right text-gray-700">
-                      {(monthlyTargetStatus.dec.Y3Plus.sales / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className={`px-4 py-2 text-right font-semibold ${
-                      monthlyTargetStatus.dec.Y3Plus.target > 0 && 
-                      (monthlyTargetStatus.dec.Y3Plus.sales / monthlyTargetStatus.dec.Y3Plus.target) * 100 >= 100
-                        ? 'bg-green-50 text-green-700'
-                        : monthlyTargetStatus.dec.Y3Plus.target > 0 && 
-                          (monthlyTargetStatus.dec.Y3Plus.sales / monthlyTargetStatus.dec.Y3Plus.target) * 100 >= 80
-                        ? 'bg-yellow-50 text-yellow-700'
-                        : 'bg-red-50 text-red-700'
-                    }`}>
-                      {monthlyTargetStatus.dec.Y3Plus.target > 0
-                        ? ((monthlyTargetStatus.dec.Y3Plus.sales / monthlyTargetStatus.dec.Y3Plus.target) * 100).toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-                        : '-'}%
-                    </td>
-                    <td className="px-4 py-2 text-right text-gray-700">
-                      {((monthlyTargetStatus.nov.Y3Plus.stock - monthlyTargetStatus.dec.Y3Plus.target) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className="px-4 py-2 text-right text-gray-700">
-                      {(monthlyTargetStatus.dec.Y3Plus.stock / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                  </tr>
-                  {/* 합계 행 */}
-                  <tr className="bg-blue-50 border-t-2 border-blue-300 font-semibold">
-                    <td className="px-4 py-2 text-left text-blue-900 whitespace-nowrap">합계</td>
-                    <td className="px-4 py-2 text-right text-blue-900 font-semibold">
-                      {((monthlyTargetStatus.nov.Y1.stock + monthlyTargetStatus.nov.Y2.stock + monthlyTargetStatus.nov.Y3Plus.stock) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className="px-4 py-2 text-right text-blue-900 font-semibold">
-                      {((monthlyTargetStatus.dec.Y1.target + monthlyTargetStatus.dec.Y2.target + monthlyTargetStatus.dec.Y3Plus.target) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className="px-4 py-2 text-right text-blue-900 font-semibold">
-                      {((monthlyTargetStatus.dec.Y1.sales + monthlyTargetStatus.dec.Y2.sales + monthlyTargetStatus.dec.Y3Plus.sales) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                    <td className={`px-4 py-2 text-right font-bold text-base ${(() => {
-                      const totalTarget = monthlyTargetStatus.dec.Y1.target + monthlyTargetStatus.dec.Y2.target + monthlyTargetStatus.dec.Y3Plus.target;
-                      const totalSales = monthlyTargetStatus.dec.Y1.sales + monthlyTargetStatus.dec.Y2.sales + monthlyTargetStatus.dec.Y3Plus.sales;
-                      const rate = totalTarget > 0 ? (totalSales / totalTarget) * 100 : 0;
-                      return rate >= 100 ? 'bg-green-100 text-green-800' : rate >= 80 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800';
-                    })()}`}>
-                      {(() => {
-                        const totalTarget = monthlyTargetStatus.dec.Y1.target + monthlyTargetStatus.dec.Y2.target + monthlyTargetStatus.dec.Y3Plus.target;
-                        const totalSales = monthlyTargetStatus.dec.Y1.sales + monthlyTargetStatus.dec.Y2.sales + monthlyTargetStatus.dec.Y3Plus.sales;
-                        return totalTarget > 0 ? ((totalSales / totalTarget) * 100).toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '-';
-                      })()}
-                    </td>
-                    <td className="px-4 py-2 text-right text-blue-900 font-semibold">
-                      {(() => {
-                        const totalNovStock = monthlyTargetStatus.nov.Y1.stock + monthlyTargetStatus.nov.Y2.stock + monthlyTargetStatus.nov.Y3Plus.stock;
-                        const totalTarget = monthlyTargetStatus.dec.Y1.target + monthlyTargetStatus.dec.Y2.target + monthlyTargetStatus.dec.Y3Plus.target;
-                        return ((totalNovStock - totalTarget) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 });
-                      })()}
-                    </td>
-                    <td className="px-4 py-2 text-right text-blue-900 font-semibold">
-                      {((monthlyTargetStatus.dec.Y1.stock + monthlyTargetStatus.dec.Y2.stock + monthlyTargetStatus.dec.Y3Plus.stock) / 1000).toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
 
         {/* 카테고리별 목표 대비 분석 섹션 */}
         <section className="mb-8">

@@ -1,14 +1,14 @@
 import { InventoryRowRaw, InventoryRow, SeasonInfo, SeasonType, YearBucket, SourceYearType, GraphDataRowRaw, GraphDataRow, CategoryType } from './types';
 
 /**
- * SUBCATEGORY 코드를 표준 카테고리로 매핑
+ * SUBCATEGORY 또는 Category 코드를 표준 카테고리로 매핑
  */
-export function mapCategory(subcategory: string): CategoryType {
-  const code = subcategory.toUpperCase();
+export function mapCategory(code: string): CategoryType {
+  const normalized = code.toUpperCase().trim();
   
-  if (code.startsWith('INN')) return 'INNER';
-  if (code.startsWith('OUT')) return 'OUTER';
-  if (code.startsWith('BOT')) return 'BOTTOM';
+  if (normalized.startsWith('INN') || normalized === 'INN') return 'INNER';
+  if (normalized.startsWith('OUT') || normalized === 'OUT') return 'OUTER';
+  if (normalized.startsWith('BOT') || normalized === 'BOT') return 'BOTTOM';
   return '의류기타';
 }
 
@@ -381,6 +381,7 @@ export function parseGraphCSVRow(row: Record<string, string>): GraphDataRowRaw {
     Stock_Price: parseNumber(row['Stock_Price']),
     Stock_Cost: parseNumber(row['Stock_Cost']),
     Country: parseString(row['Country']).toUpperCase(),
+    Category: parseString(row['Category']),
   };
 }
 
@@ -444,6 +445,9 @@ export function normalizeGraphDataRow(raw: GraphDataRowRaw): GraphDataRow {
   // 할인율 계산
   const discountRate = grossSalesFx > 0 ? 1 - (netSalesFx / grossSalesFx) : null;
   
+  // 카테고리 매핑
+  const mappedCategory = mapCategory(raw.Category);
+  
   return {
     ...raw,
     period: raw.Period,
@@ -454,6 +458,8 @@ export function normalizeGraphDataRow(raw: GraphDataRowRaw): GraphDataRow {
     stockPriceFx,
     stockCostFx,
     country: country,
+    category: raw.Category,
+    mappedCategory,
     seasonInfo,
     discountRate,
   };
