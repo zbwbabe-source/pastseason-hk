@@ -849,6 +849,87 @@ export function OffSeasonInventoryDashboard({
 
   type StagnantByBucket = Record<YearBucket, StagnantItem[]>;
 
+  // 의류기타 카테고리 품번별 분석 (CY, OFF-SEASON FW, HK/MC만)
+  const wearEtcAnalysis = useMemo(() => {
+    const cyFiltered = filteredData.filter(
+      row => row.sourceYearType === 'CY' && 
+             isOffSeasonFW(row) && 
+             (row.country === 'HK' || row.country === 'MC') &&
+             row.mappedCategory === '의류기타'
+    );
+
+    // 품번별로 집계
+    const itemMap = new Map<string, {
+      itemCode: string;
+      subcategoryName: string;
+      itemDesc2: string | null;
+      seasonCode: string;
+      yearBucket: YearBucket;
+      stockTag: number;
+      monthGross: number;
+      monthNet: number;
+      cogs: number;
+    }>();
+
+    cyFiltered.forEach(row => {
+      const existing = itemMap.get(row.itemCode);
+      if (existing) {
+        existing.stockTag += row.stockPriceFx;
+        existing.monthGross += row.grossSalesFx;
+        existing.monthNet += row.netSalesFx;
+        existing.cogs += row.cogsFx;
+      } else {
+        itemMap.set(row.itemCode, {
+          itemCode: row.itemCode,
+          subcategoryName: row.subcategoryName,
+          itemDesc2: row.itemDesc2,
+          seasonCode: row.seasonInfo.seasonCode,
+          yearBucket: row.seasonInfo.yearBucket,
+          stockTag: row.stockPriceFx,
+          monthGross: row.grossSalesFx,
+          monthNet: row.netSalesFx,
+          cogs: row.cogsFx,
+        });
+      }
+    });
+
+    // StagnantItem 형식으로 변환
+    const items: StagnantItem[] = [];
+    itemMap.forEach((data, itemCode) => {
+      const stockTagK = data.stockTag / 1000;
+      const monthGrossK = data.monthGross / 1000;
+      const monthNetK = data.monthNet / 1000;
+      const ratio = data.stockTag > 0 ? data.monthGross / data.stockTag : 0;
+      const discountRate = data.monthGross > 0 ? 1 - (data.monthNet / data.monthGross) : null;
+      const inventoryDays = data.cogs > 0 ? (data.stockTag / data.cogs) * 30 : null;
+
+      items.push({
+        itemCode,
+        subcategoryName: data.subcategoryName,
+        itemDesc2: data.itemDesc2,
+        seasonCode: data.seasonCode,
+        yearBucket: data.yearBucket,
+        stockTagK,
+        monthGrossK,
+        monthNetK,
+        discountRate,
+        inventoryDays,
+        ratio,
+      });
+    });
+
+    // 연차별로 그룹화하고 재고택가 기준 정렬
+    const result: StagnantByBucket = {
+      Y1: items.filter(i => i.yearBucket === 'Y1').sort((a, b) => b.stockTagK - a.stockTagK),
+      Y2: items.filter(i => i.yearBucket === 'Y2').sort((a, b) => b.stockTagK - a.stockTagK),
+      Y3Plus: items.filter(i => i.yearBucket === 'Y3Plus').sort((a, b) => b.stockTagK - a.stockTagK),
+      InSeason: [],
+    };
+
+    console.log('의류기타 품번별 분석:', result);
+    return result;
+  }, [filteredData]);
+
   // 정체재고 계산 (CY, OFF-SEASON FW, HK/MC만)
   const stagnantByBucket = useMemo(() => {
     const cyFiltered = filteredData.filter(
@@ -1255,6 +1336,114 @@ export function OffSeasonInventoryDashboard({
                 </div>
               </div>
             </section>
+
+        {/* 의류기타 카테고리 품번별 분석 섹션 */}
+        <section className="mb-8">
+          <div className="bg-white rounded-lg shadow-md p-6 border-2 border-indigo-200">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-2xl">🔍</span>
+              <h2 className="text-xl font-bold text-indigo-900">의류기타 카테고리 품번별 상세 분석</h2>
+            </div>
+            <p className="text-xs text-gray-500 mb-6">재고택가 기준 상위 품번 분석</p>
+            
+            {(['Y1', 'Y2', 'Y3Plus'] as const).map((bucket) => {
+              const bucketLabel = bucket === 'Y1' ? '1년차 (24F)' : bucket === 'Y2' ? '2년차 (23F)' : '3년차~ (22F~)';
+              const items = wearEtcAnalysis[bucket];
+              
+              if (items.length === 0) return null;
+              
+              const WearEtcBucketTable = () => {
+                const [showAll, setShowAll] = useState(false);
+                const displayItems = showAll ? items : items.slice(0, 10);
+                
+                return (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs border-collapse table-fixed">
+                        <colgroup>
+                          <col style={{width: '4%'}} />
+                          <col style={{width: '10%'}} />
+                          <col style={{width: '12%'}} />
+                          <col style={{width: '18%'}} />
+                          <col style={{width: '6%'}} />
+                          <col style={{width: '10%'}} />
+                          <col style={{width: '10%'}} />
+                          <col style={{width: '10%'}} />
+                          <col style={{width: '10%'}} />
+                          <col style={{width: '10%'}} />
+                        </colgroup>
+                        <thead>
+                          <tr className="border-b bg-gray-50">
+                            <th className="px-2 py-2 text-center text-gray-700 font-semibold">순위</th>
+                            <th className="px-2 py-2 text-left text-gray-700 font-semibold">Item Code</th>
+                            <th className="px-2 py-2 text-left text-gray-700 font-semibold">SUBCATEGORY NAME</th>
+                            <th className="px-2 py-2 text-left text-gray-700 font-semibold">ITEM DESC2</th>
+                            <th className="px-2 py-2 text-center text-gray-700 font-semibold">시즌</th>
+                            <th className="px-2 py-2 text-right text-gray-700 font-semibold">택가 재고</th>
+                            <th className="px-2 py-2 text-right text-gray-700 font-semibold">{periodLabel} 택가매출</th>
+                            <th className="px-2 py-2 text-right text-gray-700 font-semibold">{periodLabel} 실판매출</th>
+                            <th className="px-2 py-2 text-right text-gray-700 font-semibold">할인율 (%)</th>
+                            <th className="px-2 py-2 text-right text-gray-700 font-semibold">재고일수 (일)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {displayItems.map((item, index) => (
+                            <tr key={item.itemCode} className="border-b hover:bg-gray-50">
+                              <td className="px-2 py-2 text-center text-gray-600">{index + 1}</td>
+                              <td className="px-2 py-2 text-left text-gray-900 font-medium break-all">{item.itemCode}</td>
+                              <td className="px-2 py-2 text-left text-gray-700 break-all">{item.subcategoryName}</td>
+                              <td className="px-2 py-2 text-left text-gray-700 break-all">{item.itemDesc2 || '-'}</td>
+                              <td className="px-2 py-2 text-center text-gray-700">{item.seasonCode}</td>
+                              <td className="px-2 py-2 text-right text-blue-700 font-semibold whitespace-nowrap">
+                                {item.stockTagK.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
+                              </td>
+                              <td className="px-2 py-2 text-right text-gray-700 whitespace-nowrap">
+                                {item.monthGrossK.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
+                              </td>
+                              <td className="px-2 py-2 text-right text-gray-700 whitespace-nowrap">
+                                {item.monthNetK.toLocaleString('ko-KR', { maximumFractionDigits: 0 })}
+                              </td>
+                              <td className="px-2 py-2 text-right text-orange-600 font-medium whitespace-nowrap">
+                                {item.discountRate !== null ? (item.discountRate * 100).toFixed(1) : '-'}
+                              </td>
+                              <td className="px-2 py-2 text-right text-gray-700 whitespace-nowrap">
+                                {item.inventoryDays !== null ? Math.round(item.inventoryDays) : '-'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    
+                    {items.length > 10 && (
+                      <div className="mt-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setShowAll(!showAll)}
+                          className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                        >
+                          {showAll ? '접기 ▲' : `더보기 (${items.length - 10}개 더) ▼`}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                );
+              };
+              
+              return (
+                <div key={bucket} className="mb-6 last:mb-0">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      {bucketLabel} <span className="text-sm text-gray-500">총 {items.length}개 품번</span>
+                    </h3>
+                  </div>
+                  
+                  <WearEtcBucketTable />
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
         {/* 연차별 정체재고 분석 섹션 */}
         <StagnantByVintageSection
