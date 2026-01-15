@@ -31,3 +31,8 @@ lerna-debug.log*
 *.swo
 *~
 
+# Ignore nested project folder (accidentally created)
+Inventory Dashboard/
+
+# Ignore nested project folder (accidentally created)
+Inventory Dashboard/

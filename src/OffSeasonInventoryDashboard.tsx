@@ -1825,10 +1825,10 @@ export function OffSeasonInventoryDashboard({
                             (기준: 해당 품번기준 당월 택가매출이 재고택가의 0.1% 미만)
                           </p>
                           <p className="text-sm font-semibold text-gray-700 mb-2 bg-blue-50 px-2 py-1.5 rounded">
-                            <span>전체 25F 재고금액: {formatNumberK(totalStockK * 1000)} (택가 기준)</span>
+                            <span>전체 과시즌F 재고금액: {formatNumberK(totalStockK * 1000)} (택가 기준)</span>
                             {pyTotalStockK > 0 && (
                               <span className={`ml-2 text-xs ${totalStockYoY > 100 ? 'text-red-600' : 'text-blue-600'}`}>
-                                (전년 24F 대비 YoY {Math.round(totalStockYoY)}%)
+                                (전년 과시즌F 대비 YoY {Math.round(totalStockYoY)}%)
                               </span>
                             )}
                           </p>
