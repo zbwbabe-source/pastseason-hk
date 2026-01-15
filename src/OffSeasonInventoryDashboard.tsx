@@ -1050,6 +1050,94 @@ export function OffSeasonInventoryDashboard({
     return grouped;
   }, [filteredData]);
 
+  // 전년(PY) 정체재고 계산
+  const pyStagnantByBucket = useMemo(() => {
+    const pyFiltered = filteredData.filter(
+      row => row.sourceYearType === 'PY' && isOffSeasonFW(row) && (row.country === 'HK' || row.country === 'MC')
+    );
+
+    // 품번별로 집계
+    const itemMap = new Map<string, {
+      itemCode: string;
+      subcategory: string;
+      subcategoryName: string;
+      itemDesc2: string | null;
+      seasonCode: string;
+      yearBucket: YearBucket;
+      stockQty: number;
+      stockTag: number;
+      monthGross: number;
+      monthNet: number;
+    }>();
+
+    for (const row of pyFiltered) {
+      const key = row.itemCode;
+      if (!itemMap.has(key)) {
+        itemMap.set(key, {
+          itemCode: row.itemCode,
+          subcategory: row.subcategory,
+          subcategoryName: row.subcategoryName,
+          itemDesc2: row.itemDesc2,
+          seasonCode: row.seasonInfo.seasonCode,
+          yearBucket: row.seasonInfo.yearBucket,
+          stockQty: 0,
+          stockTag: 0,
+          monthGross: 0,
+          monthNet: 0,
+        });
+      }
+      const item = itemMap.get(key)!;
+      item.stockQty += row.stockQty;
+      item.stockTag += row.stockPriceFx;
+      item.monthGross += row.grossSalesFx;
+      item.monthNet += row.netSalesFx;
+    }
+
+    // 정체 조건 적용: ratio < 0.001 (0.1% 미만)
+    const stagnantItems: StagnantItem[] = [];
+    for (const item of itemMap.values()) {
+      if (item.stockTag > 0) {
+        const ratio = item.monthGross / item.stockTag;
+        if (ratio < 0.001) {
+          const discountRate = item.monthGross > 0 ? (1 - item.monthNet / item.monthGross) * 100 : null;
+          const inventoryDays = item.monthGross > 0 ? (item.stockTag / item.monthGross) * 30 : null;
+
+          stagnantItems.push({
+            itemCode: item.itemCode,
+            subcategory: item.subcategory,
+            subcategoryName: item.subcategoryName,
+            itemDesc2: item.itemDesc2,
+            seasonCode: item.seasonCode,
+            yearBucket: item.yearBucket,
+            stockQty: item.stockQty,
+            stockTagK: item.stockTag / 1000,
+            monthGrossK: item.monthGross / 1000,
+            monthNetK: item.monthNet / 1000,
+            discountRate,
+            inventoryDays,
+            ratio,
+          });
+        }
+      }
+    }
+
+    // 연차별로 그룹핑
+    const grouped: StagnantByBucket = {
+      InSeason: [],
+      Y1: [],
+      Y2: [],
+      Y3Plus: [],
+    };
+
+    for (const item of stagnantItems) {
+      if (item.yearBucket === 'Y1' || item.yearBucket === 'Y2' || item.yearBucket === 'Y3Plus') {
+        grouped[item.yearBucket].push(item);
+      }
+    }
+
+    return grouped;
+  }, [filteredData]);
+
   // 카테고리별 목표 대비 분석 (Graph 데이터 사용)
   const categoryAnalysis = useMemo(() => {
     console.log('=== 카테고리별 분석 ===');
@@ -1255,6 +1343,8 @@ export function OffSeasonInventoryDashboard({
               // 1년차 분석
               const y1Total = y1Data['합계'];
               const y1AchievementRate = y1Total ? (y1Total.tagSalesActual / Math.max(y1Total.tagSalesTarget, 1)) * 100 : 0;
+              const y1DiscountActual = y1Total && y1Total.tagSalesActual > 0 ? (1 - y1Total.netSalesActual / y1Total.tagSalesActual) * 100 : 0;
+              const y1DiscountDiff = y1Total ? y1DiscountActual - y1Total.discountRateTarget * 100 : 0;
               
               // 2년차 분석
               const y2Total = y2Data['합계'];
@@ -1267,6 +1357,41 @@ export function OffSeasonInventoryDashboard({
               const y3AchievementRate = y3Total ? (y3Total.tagSalesActual / Math.max(y3Total.tagSalesTarget, 1)) * 100 : 0;
               const y3DiscountActual = y3Total && y3Total.tagSalesActual > 0 ? (1 - y3Total.netSalesActual / y3Total.tagSalesActual) * 100 : 0;
               const y3DiscountDiff = y3Total ? y3DiscountActual - y3Total.discountRateTarget * 100 : 0;
+              
+              // 전체 합계 계산
+              const totalSalesActual = (y1Total?.tagSalesActual || 0) + (y2Total?.tagSalesActual || 0) + (y3Total?.tagSalesActual || 0);
+              const totalSalesTarget = (y1Total?.tagSalesTarget || 0) + (y2Total?.tagSalesTarget || 0) + (y3Total?.tagSalesTarget || 0);
+              const totalAchievementRate = totalSalesTarget > 0 ? (totalSalesActual / totalSalesTarget) * 100 : 0;
+              
+              const totalNetSalesActual = (y1Total?.netSalesActual || 0) + (y2Total?.netSalesActual || 0) + (y3Total?.netSalesActual || 0);
+              const totalDiscountActual = totalSalesActual > 0 ? (1 - totalNetSalesActual / totalSalesActual) * 100 : 0;
+              
+              // 할인율 목표는 가중평균
+              const totalDiscountTarget = totalSalesTarget > 0 
+                ? ((y1Total?.discountRateTarget || 0) * (y1Total?.tagSalesTarget || 0) +
+                   (y2Total?.discountRateTarget || 0) * (y2Total?.tagSalesTarget || 0) +
+                   (y3Total?.discountRateTarget || 0) * (y3Total?.tagSalesTarget || 0)) / totalSalesTarget * 100
+                : 0;
+              const totalDiscountDiff = totalDiscountActual - totalDiscountTarget;
+              
+              // 전체 재고금액 계산 (원본 금액을 K 단위로 변환)
+              const totalStockK = ((y1Total?.stock2512Actual || 0) + (y2Total?.stock2512Actual || 0) + (y3Total?.stock2512Actual || 0)) / 1000;
+              const y1StockK = (y1Total?.stock2512Actual || 0) / 1000;
+              const y2StockK = (y2Total?.stock2512Actual || 0) / 1000;
+              const y3StockK = (y3Total?.stock2512Actual || 0) / 1000;
+              
+              // 전년(PY) 재고금액 계산 (2412 period, OFF-SEASON FW, HK/MO)
+              const pyTotalStockK = graphData
+                .filter(row => 
+                  row.period === '2412' && 
+                  (row.country === 'HK' || row.country === 'MO') && 
+                  isOffSeasonFW(row)
+                )
+                .reduce((sum, row) => sum + row.stockPriceFx, 0) / 1000;
+              
+              // 전년 재고금액 대비 YoY
+              const totalStockYoY = pyTotalStockK > 0 ? (totalStockK / pyTotalStockK) * 100 : 0;
+              
               
               // 카테고리별 분석 (전체 연차 합산)
               const categoryPerformance: Record<string, { sales: number; achievement: number; discountDiff: number; stockVariance: number }> = {};
@@ -1373,7 +1498,7 @@ export function OffSeasonInventoryDashboard({
               
               analysisText += '\n\n';
               
-              // 정체재고 수량 및 택금액 분석
+              // 정체재고 수량 및 택금액 분석 (CY)
               const totalStagnantQty = stagnantByBucket.Y1.reduce((sum, item) => sum + item.stockQty, 0) +
                                        stagnantByBucket.Y2.reduce((sum, item) => sum + item.stockQty, 0) +
                                        stagnantByBucket.Y3Plus.reduce((sum, item) => sum + item.stockQty, 0);
@@ -1381,13 +1506,27 @@ export function OffSeasonInventoryDashboard({
               const y2StagnantQty = stagnantByBucket.Y2.reduce((sum, item) => sum + item.stockQty, 0);
               const y3StagnantQty = stagnantByBucket.Y3Plus.reduce((sum, item) => sum + item.stockQty, 0);
               
-              // 정체재고 택금액 계산 (K 단위)
+              // 정체재고 택금액 계산 (K 단위) - CY
               const totalStagnantStockTagK = stagnantByBucket.Y1.reduce((sum, item) => sum + item.stockTagK, 0) +
                                            stagnantByBucket.Y2.reduce((sum, item) => sum + item.stockTagK, 0) +
                                            stagnantByBucket.Y3Plus.reduce((sum, item) => sum + item.stockTagK, 0);
               const y1StagnantStockTagK = stagnantByBucket.Y1.reduce((sum, item) => sum + item.stockTagK, 0);
               const y2StagnantStockTagK = stagnantByBucket.Y2.reduce((sum, item) => sum + item.stockTagK, 0);
               const y3StagnantStockTagK = stagnantByBucket.Y3Plus.reduce((sum, item) => sum + item.stockTagK, 0);
+
+              // 전년(PY) 정체재고 택금액 계산 (K 단위)
+              const pyTotalStagnantStockTagK = pyStagnantByBucket.Y1.reduce((sum, item) => sum + item.stockTagK, 0) +
+                                             pyStagnantByBucket.Y2.reduce((sum, item) => sum + item.stockTagK, 0) +
+                                             pyStagnantByBucket.Y3Plus.reduce((sum, item) => sum + item.stockTagK, 0);
+              const pyY1StagnantStockTagK = pyStagnantByBucket.Y1.reduce((sum, item) => sum + item.stockTagK, 0);
+              const pyY2StagnantStockTagK = pyStagnantByBucket.Y2.reduce((sum, item) => sum + item.stockTagK, 0);
+              const pyY3StagnantStockTagK = pyStagnantByBucket.Y3Plus.reduce((sum, item) => sum + item.stockTagK, 0);
+
+              // 전년 대비 YoY 비율 계산 (전년 = 100% 기준)
+              const totalStagnantYoY = pyTotalStagnantStockTagK > 0 ? (totalStagnantStockTagK / pyTotalStagnantStockTagK) * 100 : 0;
+              const y1StagnantYoY = pyY1StagnantStockTagK > 0 ? (y1StagnantStockTagK / pyY1StagnantStockTagK) * 100 : 0;
+              const y2StagnantYoY = pyY2StagnantStockTagK > 0 ? (y2StagnantStockTagK / pyY2StagnantStockTagK) * 100 : 0;
+              const y3StagnantYoY = pyY3StagnantStockTagK > 0 ? (y3StagnantStockTagK / pyY3StagnantStockTagK) * 100 : 0;
               
               analysisText += '📦 정체재고 수량: ';
               analysisText += `총 ${totalStagnantQty.toLocaleString('ko-KR')}개(QTY), 택금액 ${formatNumberK(totalStagnantStockTagK * 1000)}의 정체재고가 있으며, `;
@@ -1404,27 +1543,316 @@ export function OffSeasonInventoryDashboard({
               }
               
               return (
-                <div className="mb-6 bg-gradient-to-r from-purple-50 to-indigo-50 border-l-4 border-purple-500 rounded-lg overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setAiAnalysisOpen(!aiAnalysisOpen)}
-                    className="w-full flex items-center justify-between p-4 hover:bg-purple-100 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">🤖</span>
-                      <div className="text-sm font-bold text-purple-900">AI 분석 요약</div>
-                    </div>
-                    <span className={`text-purple-600 transition-transform ${aiAnalysisOpen ? 'rotate-180' : ''}`}>
-                      ▾
-                    </span>
-                  </button>
-                  {aiAnalysisOpen && (
-                    <div className="px-4 pb-4">
-                      <div className="text-sm text-gray-800 whitespace-pre-line leading-relaxed">
-                        {analysisText}
+                <div className="mb-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-2xl">🤖</span>
+                    <h3 className="text-lg font-bold text-purple-900">AI 분석 요약</h3>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* 카드 1: 연차별 소진 실적 */}
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-blue-500 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">📌</span>
+                            <h4 className="font-semibold text-blue-900">연차별 소진 실적</h4>
+                          </div>
+                          <span className="text-xs text-blue-600 ml-7 mt-0.5">
+                            (12월 1개월간 판매 목표대비 실적률)
+                          </span>
+                        </div>
+                        <span className="px-2 py-1 bg-blue-200 text-blue-800 text-xs font-semibold rounded-full">
+                          12월 목표대비 실적 분석
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-700">1년차:</span>
+                          <span className={`font-bold ${y1AchievementRate >= 90 ? 'text-green-600' : 'text-orange-600'}`}>
+                            {y1AchievementRate.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-700">2년차:</span>
+                          <span className="font-bold text-orange-600">{y2AchievementRate.toFixed(1)}%</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-700">3년차:</span>
+                          <span className="font-bold text-red-600">{y3AchievementRate.toFixed(1)}%</span>
+                        </div>
+                        <div className="mt-2 pt-2 border-t-2 border-blue-300">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-bold text-blue-900">합계:</span>
+                            <span className={`font-bold text-lg ${totalAchievementRate >= 80 ? 'text-green-600' : totalAchievementRate >= 60 ? 'text-orange-600' : 'text-red-600'}`}>
+                              {totalAchievementRate.toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-blue-200">
+                          <p className="text-xs text-gray-600 leading-relaxed">
+                            {y1AchievementRate >= 90 
+                              ? `1년차는 양호한 실적. 2·3년차는 목표 미달.`
+                              : '전 연차 판매목표 미달. 할인 전략 강화 필요.'}
+                          </p>
+                          <p className="text-xs text-blue-700 font-semibold mt-2 bg-blue-50 px-2 py-1 rounded">
+                            ※ 3년차까지 판매 후 최종 95% 소진 목표
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  )}
+
+                    {/* 카드 2: 할인율 전략 */}
+                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 border-l-4 border-purple-500 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">💡</span>
+                          <h4 className="font-semibold text-purple-900">할인율 전략</h4>
+                        </div>
+                        <span className="px-2 py-1 bg-purple-200 text-purple-800 text-xs font-semibold rounded-full">
+                          12월 목표대비 실적 분석
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center text-xs border-b border-purple-200 pb-1 mb-2">
+                          <span className="flex-1 text-gray-600"></span>
+                          <span className="w-16 text-center text-gray-600">실적</span>
+                          <span className="w-20 text-center text-gray-600">목표대비</span>
+                        </div>
+                        <div className="flex items-center text-sm">
+                          <span className="flex-1 text-gray-700">1년차:</span>
+                          <span className="w-16 text-center font-semibold">{y1DiscountActual.toFixed(1)}%</span>
+                          <span className={`w-20 text-center font-bold ${y1DiscountDiff < 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                            {y1DiscountDiff > 0 ? '+' : ''}{y1DiscountDiff.toFixed(1)}%p
+                          </span>
+                        </div>
+                        <div className="flex items-center text-sm">
+                          <span className="flex-1 text-gray-700">2년차:</span>
+                          <span className="w-16 text-center font-semibold">{y2DiscountActual.toFixed(1)}%</span>
+                          <span className={`w-20 text-center font-bold ${y2DiscountDiff < 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                            {y2DiscountDiff > 0 ? '+' : ''}{y2DiscountDiff.toFixed(1)}%p
+                          </span>
+                        </div>
+                        <div className="flex items-center text-sm">
+                          <span className="flex-1 text-gray-700">3년차:</span>
+                          <span className="w-16 text-center font-semibold">{y3DiscountActual.toFixed(1)}%</span>
+                          <span className={`w-20 text-center font-bold ${y3DiscountDiff < 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                            {y3DiscountDiff > 0 ? '+' : ''}{y3DiscountDiff.toFixed(1)}%p
+                          </span>
+                        </div>
+                        <div className="mt-2 pt-2 border-t-2 border-purple-300">
+                          <div className="flex items-center">
+                            <span className="flex-1 text-sm font-bold text-purple-900">합계:</span>
+                            <span className="w-16 text-center font-bold text-lg">{totalDiscountActual.toFixed(1)}%</span>
+                            <span className={`w-20 text-center font-bold text-lg ${totalDiscountDiff < 0 ? 'text-red-600' : 'text-blue-600'}`}>
+                              {totalDiscountDiff > 0 ? '+' : ''}{totalDiscountDiff.toFixed(1)}%p
+                            </span>
+                          </div>
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-purple-200">
+                          <p className="text-xs text-gray-600 leading-relaxed">
+                            목표 대비 할인율이 낮아 판매 부진. 공격적 할인 필요.
+                          </p>
+                          <p className="text-xs text-purple-700 font-semibold mt-2 bg-purple-50 p-2 rounded">
+                            ⚠️ 특히 3년차의 경우 재고평가감이 100% 반영되어 있으므로, 공격적 할인을 통해 소진이 필요함.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 카드 3: 카테고리별 분석 */}
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 border-l-4 border-green-500 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">🎯</span>
+                          <h4 className="font-semibold text-green-900">카테고리별 분석</h4>
+                        </div>
+                        <span className="px-2 py-1 bg-green-200 text-green-800 text-xs font-semibold rounded-full">
+                          12월 목표대비 실적 분석
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {(() => {
+                          const etcPerformance = categoryPerformance['의류기타'];
+                          const bottomPerformance = categoryPerformance['BOTTOM'];
+                          const innerPerformance = categoryPerformance['INNER'];
+                          const outerPerformance = categoryPerformance['OUTER'];
+                          
+                          return (
+                            <>
+                              {innerPerformance && (
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-gray-700">INNER:</span>
+                                  <span className={`font-bold ${innerPerformance.achievement > 80 ? 'text-green-600' : innerPerformance.achievement > 50 ? 'text-orange-600' : 'text-red-600'}`}>
+                                    {innerPerformance.achievement.toFixed(1)}%
+                                  </span>
+                                </div>
+                              )}
+                              {outerPerformance && (
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-gray-700">OUTER:</span>
+                                  <span className={`font-bold ${outerPerformance.achievement > 80 ? 'text-green-600' : outerPerformance.achievement > 50 ? 'text-orange-600' : 'text-red-600'}`}>
+                                    {outerPerformance.achievement.toFixed(1)}%
+                                  </span>
+                                </div>
+                              )}
+                              {bottomPerformance && (
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-gray-700">BOTTOM:</span>
+                                  <span className={`font-bold ${bottomPerformance.achievement > 80 ? 'text-green-600' : bottomPerformance.achievement > 50 ? 'text-orange-600' : 'text-red-600'}`}>
+                                    {bottomPerformance.achievement.toFixed(1)}%
+                                  </span>
+                                </div>
+                              )}
+                              {etcPerformance && (
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm text-gray-700">의류기타:</span>
+                                  <span className={`font-bold ${etcPerformance.achievement > 100 ? 'text-green-600' : 'text-gray-600'}`}>
+                                    {etcPerformance.achievement.toFixed(1)}%
+                                  </span>
+                                </div>
+                              )}
+                              <div className="mt-2 pt-2 border-t-2 border-green-300">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-sm font-bold text-green-900">합계:</span>
+                                  <span className={`font-bold text-lg ${totalAchievementRate >= 80 ? 'text-green-600' : totalAchievementRate >= 60 ? 'text-orange-600' : 'text-red-600'}`}>
+                                    {totalAchievementRate.toFixed(1)}%
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="mt-3 pt-3 border-t border-green-200">
+                                <p className="text-xs text-gray-600 leading-relaxed">
+                                  {etcPerformance && etcPerformance.achievement > 100 
+                                    ? '비니 판매 증가로 의류기타 목표 초과. '
+                                    : ''}
+                                  {bottomPerformance && bottomPerformance.achievement < 50
+                                    ? 'BOTTOM 전 연차 실적 부진.'
+                                    : ''}
+                                </p>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* 카드 4: 정체재고 현황 */}
+                    <div className="bg-gradient-to-br from-orange-50 to-orange-100 border-l-4 border-orange-500 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-xl">📦</span>
+                        <h4 className="font-semibold text-orange-900">정체재고 현황</h4>
+                      </div>
+                      <div className="text-xs text-gray-600 text-right mb-2 italic">
+                        수량 / 재고TAG (재고대비 비중)
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center py-2 bg-orange-50 px-3 rounded-lg">
+                          <span className="text-base font-bold text-gray-800">전체:</span>
+                          <div className="text-right">
+                            <div>
+                              <span className="text-sm font-semibold text-gray-900">{totalStagnantQty.toLocaleString('ko-KR')} pcs / </span>
+                              <span className="text-xl font-extrabold text-orange-600">{formatNumberK(totalStagnantStockTagK * 1000)}</span>
+                              {totalStockK > 0 && (
+                                <span className="text-sm text-orange-700 font-bold ml-1">
+                                  ({((totalStagnantStockTagK / totalStockK) * 100).toFixed(1)}%)
+                                </span>
+                              )}
+                            </div>
+                            {pyTotalStagnantStockTagK > 0 && (
+                              <div className={`text-xs font-semibold mt-0.5 ${totalStagnantYoY > 100 ? 'text-red-600' : 'text-blue-600'}`}>
+                                YoY {Math.round(totalStagnantYoY)}%
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="border-t border-orange-300"></div>
+                        <div className="flex justify-between items-center py-1">
+                          <span className="text-sm text-gray-700">1년차:</span>
+                          <div className="text-right">
+                            <div>
+                              <span className="text-xs text-gray-900">{y1StagnantQty.toLocaleString('ko-KR')} pcs / </span>
+                              <span className="text-base font-bold text-orange-600">{formatNumberK(y1StagnantStockTagK * 1000)}</span>
+                              {y1StockK > 0 && (
+                                <span className="text-xs text-orange-600 font-semibold ml-1">
+                                  ({((y1StagnantStockTagK / y1StockK) * 100).toFixed(1)}%)
+                                </span>
+                              )}
+                            </div>
+                            {pyY1StagnantStockTagK > 0 && (
+                              <div className={`text-xs ${y1StagnantYoY > 100 ? 'text-red-600' : 'text-blue-600'}`}>
+                                YoY {Math.round(y1StagnantYoY)}%
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center py-1">
+                          <span className="text-sm text-gray-700">2년차:</span>
+                          <div className="text-right">
+                            <div>
+                              <span className="text-xs text-gray-900">{y2StagnantQty.toLocaleString('ko-KR')} pcs / </span>
+                              <span className="text-base font-bold text-orange-600">{formatNumberK(y2StagnantStockTagK * 1000)}</span>
+                              {y2StockK > 0 && (
+                                <span className="text-xs text-orange-600 font-semibold ml-1">
+                                  ({((y2StagnantStockTagK / y2StockK) * 100).toFixed(1)}%)
+                                </span>
+                              )}
+                            </div>
+                            {pyY2StagnantStockTagK > 0 && (
+                              <div className={`text-xs ${y2StagnantYoY > 100 ? 'text-red-600' : 'text-blue-600'}`}>
+                                YoY {Math.round(y2StagnantYoY)}%
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center py-1">
+                          <span className="text-sm text-gray-700">3년차:</span>
+                          <div className="text-right">
+                            <div>
+                              <span className="text-xs text-gray-900">{y3StagnantQty.toLocaleString('ko-KR')} pcs / </span>
+                              <span className="text-base font-bold text-orange-600">{formatNumberK(y3StagnantStockTagK * 1000)}</span>
+                              {y3StockK > 0 && (
+                                <span className="text-xs text-orange-600 font-semibold ml-1">
+                                  ({((y3StagnantStockTagK / y3StockK) * 100).toFixed(1)}%)
+                                </span>
+                              )}
+                            </div>
+                            {pyY3StagnantStockTagK > 0 && (
+                              <div className={`text-xs ${y3StagnantYoY > 100 ? 'text-red-600' : 'text-blue-600'}`}>
+                                YoY {Math.round(y3StagnantYoY)}%
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-orange-200">
+                          <p className="text-xs text-gray-500 mb-1">
+                            (기준: 해당 품번기준 당월 택가매출이 재고택가의 0.1% 미만)
+                          </p>
+                          <p className="text-sm font-semibold text-gray-700 mb-2 bg-blue-50 px-2 py-1.5 rounded">
+                            <span>전체 25F 재고금액: {formatNumberK(totalStockK * 1000)} (택가 기준)</span>
+                            {pyTotalStockK > 0 && (
+                              <span className={`ml-2 text-xs ${totalStockYoY > 100 ? 'text-red-600' : 'text-blue-600'}`}>
+                                (전년 24F 대비 YoY {Math.round(totalStockYoY)}%)
+                              </span>
+                            )}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const stagnantSection = document.querySelector('[data-section="stagnant-inventory"]');
+                              if (stagnantSection) {
+                                stagnantSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                              }
+                            }}
+                            className="w-full px-3 py-2 text-xs font-semibold text-orange-700 bg-orange-50 border border-orange-300 rounded-lg hover:bg-orange-100 transition-colors flex items-center justify-center gap-1"
+                          >
+                            <span>📋</span>
+                            <span>세부 품번별 내역 보기</span>
+                            <span>↓</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               );
             })()}
@@ -2344,7 +2772,7 @@ const StagnantByVintageSection: React.FC<StagnantByVintageSectionProps> = ({ ite
   }
 
   return (
-    <div className="mb-8">
+    <div className="mb-8" data-section="stagnant-inventory">
       <div className="rounded-xl border border-gray-200 bg-white">
         <button
           type="button"
