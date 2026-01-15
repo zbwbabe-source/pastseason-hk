@@ -277,9 +277,6 @@ export function OffSeasonInventoryDashboard({
   // 연차별 열림/닫힘 상태 관리 (Y1, Y2, Y3Plus 순서)
   const [yearBucketStates, setYearBucketStates] = useState<boolean[]>([true, true, true]);
   
-  // AI 분석 섹션 토글 상태
-  const [aiAnalysisOpen, setAiAnalysisOpen] = useState(true);
-  
   // 전체 과시즌 합계 토글 상태
   const [totalSectionOpen, setTotalSectionOpen] = useState(true);
 
